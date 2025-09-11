@@ -48,8 +48,8 @@ export default function HomePage() {
       window.location.href = "/student"
     } else if (loginType === "admin") {
       window.location.href = "/admin"
-    } else {
-      alert("Parent portal functionality would be implemented here")
+    } else if (loginType === "guardian") {
+      window.location.href = "/guardian"
     }
     setLoginOpen(false)
   }
@@ -106,7 +106,7 @@ export default function HomePage() {
                           <SelectItem value="student">Student</SelectItem>
                           <SelectItem value="teacher">Teacher</SelectItem>
                           <SelectItem value="admin">Administrator</SelectItem>
-                          <SelectItem value="parent">Parent</SelectItem>
+                          <SelectItem value="guardian">Guardian (with Student Access)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

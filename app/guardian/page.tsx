@@ -19,7 +19,7 @@ import {
   Calendar,
 } from "lucide-react"
 
-// Mock data matching the image
+// Mock data matching the student portal
 const mockAssignments = [
   {
     id: 1,
@@ -53,7 +53,7 @@ const mockCourseProgress = [
   { subject: "English Literature", progress: 85 },
 ]
 
-export default function StudentDashboard() {
+export default function GuardianDashboard() {
   const [activeNav, setActiveNav] = useState("dashboard")
 
   return (
@@ -70,7 +70,7 @@ export default function StudentDashboard() {
               className="rounded-full"
             />
             <div>
-              <h1 className="text-lg font-semibold text-gray-800">Student Portal</h1>
+              <h1 className="text-lg font-semibold text-gray-800">Guardian Portal</h1>
               <p className="text-xs text-gray-500">Sto Niño de Praga Academy</p>
             </div>
           </div>
@@ -92,8 +92,8 @@ export default function StudentDashboard() {
                 MT
               </div>
               <div className="text-sm">
-                <p className="font-medium text-gray-800">Miguel Torres</p>
-                <p className="text-xs text-gray-500">Student</p>
+                <p className="font-medium text-gray-800">Maria Torres</p>
+                <p className="text-xs text-gray-500">Guardian</p>
               </div>
             </div>
           </div>
@@ -183,8 +183,8 @@ export default function StudentDashboard() {
             <div className="space-y-6">
               {/* Welcome Section */}
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back, Miguel Torres!</h2>
-                <p className="text-gray-600">Here's your academic overview for today.</p>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back, Maria Torres!</h2>
+                <p className="text-gray-600">Here's Miguel's academic overview for today.</p>
               </div>
 
               {/* Stats Cards */}
@@ -257,7 +257,7 @@ export default function StudentDashboard() {
                   <CardHeader>
                     <CardTitle className="text-lg font-semibold text-gray-900">Recent Assignments</CardTitle>
                     <CardDescription className="text-sm text-gray-600">
-                      Your latest assignments and their status
+                      Miguel's latest assignments and their status
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -293,7 +293,7 @@ export default function StudentDashboard() {
                   <CardHeader>
                     <CardTitle className="text-lg font-semibold text-gray-900">Course Progress</CardTitle>
                     <CardDescription className="text-sm text-gray-600">
-                      Your progress in current subjects
+                      Miguel's progress in current subjects
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -320,7 +320,7 @@ export default function StudentDashboard() {
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Enrollment Status</CardTitle>
-                  <CardDescription>Your current enrollment status</CardDescription>
+                  <CardDescription>Miguel's current enrollment status</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -347,7 +347,7 @@ export default function StudentDashboard() {
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Class Schedule</CardTitle>
-                  <CardDescription>Your weekly class schedule and important dates</CardDescription>
+                  <CardDescription>Miguel's weekly class schedule and important dates</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -406,7 +406,7 @@ export default function StudentDashboard() {
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Current Grades</CardTitle>
-                  <CardDescription>Your grades for the current semester</CardDescription>
+                  <CardDescription>Miguel's grades for the current semester</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -452,7 +452,7 @@ export default function StudentDashboard() {
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Personal Information</CardTitle>
-                  <CardDescription>Your student profile and contact information</CardDescription>
+                  <CardDescription>Miguel's student profile and contact information</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
