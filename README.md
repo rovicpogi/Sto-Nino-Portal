@@ -1,30 +1,83 @@
-# Sto nino welcome page
+# Sto Niño Portal
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/) [![Supabase](https://img.shields.io/badge/Supabase-DB%2FAuth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/) [![Tailwind](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/rovicdg18-9531s-projects/v0-sto-nino-welcome-page)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/Rydq6UJg8og)
+A school portal with Admin, Teacher, Student, and Parent views. Frontend is implemented with Next.js App Router and shadcn/ui; backend integrates Supabase for database and auth.
 
-## Overview
+## Quick Start
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+1) Install dependencies
 
-## Deployment
+```bash
+pnpm install
+```
 
-Your project is live at:
+2) Create `.env.local` in the project root:
 
-**[https://vercel.com/rovicdg18-9531s-projects/v0-sto-nino-welcome-page](https://vercel.com/rovicdg18-9531s-projects/v0-sto-nino-welcome-page)**
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-## Build your app
+3) Run the dev server
 
-Continue building your app on:
+```bash
+pnpm dev
+```
 
-**[https://v0.dev/chat/projects/Rydq6UJg8og](https://v0.dev/chat/projects/Rydq6UJg8og)**
+4) Verify Supabase connectivity
 
-## How It Works
+Open `/api/health/supabase` in your browser. You should see `{"ok":true}` if keys are valid.
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+## Scripts
+
+- `pnpm dev` — start Next.js in development
+- `pnpm build` — build for production
+- `pnpm start` — run production build
+- `pnpm lint` — run Next/TypeScript linting
+
+## Project Structure
+
+```
+app/                  # Next.js App Router routes
+  admin/              # Admin portal UI
+  teacher/            # Teacher portal UI
+  student/            # Student portal UI
+  parent/             # Parent portal UI
+  api/                # API routes (server only)
+components/           # Reusable UI components (shadcn/ui)
+lib/                  # Utilities and clients (e.g., supabaseClient)
+public/               # Static assets
+styles/               # Global styles
+docs/                 # Additional documentation
+```
+
+Key files:
+
+- `lib/supabaseClient.ts` — creates and validates the Supabase client
+- `app/api/health/supabase/route.ts` — simple health endpoint for DB/Auth
+
+## Using Supabase in Code
+
+```ts
+import { supabase } from '@/lib/supabaseClient'
+
+export async function loadStudents() {
+  const { data, error } = await supabase.from('students').select('*')
+  if (error) throw error
+  return data
+}
+```
+
+## Documentation
+
+- See `docs/ARCHITECTURE.md` for a high-level overview
+- See `docs/SUPABASE.md` to configure DB/Auth and test connectivity
+- See `docs/BACKEND.md` for API route patterns and examples
+- See `docs/FRONTEND.md` for UI conventions and file paths
+
+## Notes for Students
+
+- Keep your `.env.local` private; never commit credentials
+- When stuck, check the health route and console logs first
+- Small, incremental changes are easier to test and review
