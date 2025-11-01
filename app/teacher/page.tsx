@@ -36,6 +36,7 @@ import {
   Bell,
   Clock,
   Home,
+  Trash2,
 } from "lucide-react"
 
 export default function TeacherPortal() {
@@ -51,6 +52,7 @@ export default function TeacherPortal() {
   const [showAddJournal, setShowAddJournal] = useState(false)
   const [teacherData, setTeacherData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [journalEntries, setJournalEntries] = useState<any[]>([])
   const [dashboardStats, setDashboardStats] = useState({
     totalStudents: 0,
     classesToday: 0,
@@ -66,6 +68,15 @@ export default function TeacherPortal() {
     if (user) {
       setTeacherData(JSON.parse(user))
     }
+    
+    // Load journal entries from localStorage
+    const savedEntries = localStorage.getItem(`journal_entries_${user ? JSON.parse(user).email : 'default'}`)
+    if (savedEntries) {
+      const entries = JSON.parse(savedEntries)
+      setJournalEntries(entries)
+      setDashboardStats(prev => ({ ...prev, journalEntries: entries.length }))
+    }
+    
     setIsLoading(false)
   }, [])
 
@@ -100,9 +111,41 @@ export default function TeacherPortal() {
 
   const handleJournalSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Journal entry submitted:", journalEntry)
+    
+    const newEntry = {
+      id: Date.now(),
+      ...journalEntry,
+      createdAt: new Date().toISOString(),
+    }
+    
+    const updatedEntries = [newEntry, ...journalEntries]
+    setJournalEntries(updatedEntries)
+    
+    // Save to localStorage
+    const user = localStorage.getItem("teacher")
+    const email = user ? JSON.parse(user).email : 'default'
+    localStorage.setItem(`journal_entries_${email}`, JSON.stringify(updatedEntries))
+    
+    // Update dashboard stats
+    setDashboardStats(prev => ({ ...prev, journalEntries: updatedEntries.length }))
+    
     setShowAddJournal(false)
     setJournalEntry({ date: "", subject: "", topic: "", activities: "", notes: "" })
+  }
+  
+  const handleDeleteJournal = (id: number) => {
+    if (confirm("Are you sure you want to delete this journal entry?")) {
+      const updatedEntries = journalEntries.filter(entry => entry.id !== id)
+      setJournalEntries(updatedEntries)
+      
+      // Save to localStorage
+      const user = localStorage.getItem("teacher")
+      const email = user ? JSON.parse(user).email : 'default'
+      localStorage.setItem(`journal_entries_${email}`, JSON.stringify(updatedEntries))
+      
+      // Update dashboard stats
+      setDashboardStats(prev => ({ ...prev, journalEntries: updatedEntries.length }))
+    }
   }
 
   if (isLoading) {
@@ -418,11 +461,52 @@ export default function TeacherPortal() {
                 </Dialog>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="text-center text-gray-500 py-8">
-                    No journal entries found. Data will be loaded from database.
+                {journalEntries.length > 0 ? (
+                  <div className="space-y-4">
+                    {journalEntries.map((entry) => (
+                      <Card key={entry.id} className="border-l-4 border-l-red-800">
+                        <CardContent className="pt-6">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h3 className="font-semibold text-lg text-gray-900">{entry.topic}</h3>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {entry.subject} • {new Date(entry.date).toLocaleDateString('en-US', { 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteJournal(entry.id)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Activities Conducted:</p>
+                              <p className="text-sm text-gray-600">{entry.activities}</p>
+                            </div>
+                            {entry.notes && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-700">Notes & Observations:</p>
+                                <p className="text-sm text-gray-600">{entry.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No journal entries found. Click "Add Entry" to create your first journal entry.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
