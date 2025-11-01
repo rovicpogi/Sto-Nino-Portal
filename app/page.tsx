@@ -24,6 +24,10 @@ import { GraduationCap, Users, BookOpen, Award, Phone, Mail, MapPin } from "luci
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [loginType, setLoginType] = useState("student")
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState("")
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [admissionForm, setAdmissionForm] = useState({
     studentName: "",
     parentName: "",
@@ -40,22 +44,90 @@ export default function HomePage() {
     alert("Thank you for your interest! We will contact you soon.")
   }
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (loginType === "teacher") {
-      window.location.href = "/teacher"
-    } else if (loginType === "student") {
-      window.location.href = "/student"
-    } else if (loginType === "admin") {
-      window.location.href = "/admin"
-    } else if (loginType === "guardian") {
-      window.location.href = "/guardian"
+    setLoginError("")
+    setIsLoggingIn(true)
+
+    try {
+      // Determine the API endpoint based on login type
+      let apiEndpoint = ""
+      if (loginType === "teacher") {
+        apiEndpoint = "/api/teacher/login"
+      } else if (loginType === "student") {
+        apiEndpoint = "/api/student/login"
+      } else if (loginType === "admin") {
+        apiEndpoint = "/api/admin/login"
+      } else if (loginType === "guardian") {
+        apiEndpoint = "/api/student/login"
+      }
+
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      // Handle both 'success' and 'ok' response formats
+      if (data.success || data.ok) {
+        // Store user data in localStorage if available
+        if (data.teacher) {
+          localStorage.setItem("teacher", JSON.stringify(data.teacher))
+        } else if (data.student) {
+          localStorage.setItem("student", JSON.stringify(data.student))
+        } else if (data.user) {
+          // Handle new API format (data.user + data.userType)
+          if (loginType === "teacher" || data.userType === "teacher") {
+            localStorage.setItem("teacher", JSON.stringify(data.user))
+          } else if (loginType === "student" || data.userType === "student") {
+            localStorage.setItem("student", JSON.stringify(data.user))
+          } else if (loginType === "admin" || data.userType === "admin") {
+            localStorage.setItem("admin", JSON.stringify(data.user))
+          }
+        }
+        
+        // Keep loading state during redirect
+        setLoginOpen(false)
+        
+        // Redirect based on user type
+        if (loginType === "teacher") {
+          window.location.href = "/teacher"
+        } else if (loginType === "student") {
+          window.location.href = "/student"
+        } else if (loginType === "admin") {
+          window.location.href = "/admin"
+        } else if (loginType === "guardian") {
+          window.location.href = "/guardian"
+        }
+      } else {
+        setLoginError(data.error || "Login failed")
+        setIsLoggingIn(false)
+      }
+    } catch (error) {
+      setLoginError("Network error. Please try again.")
+      setIsLoggingIn(false)
     }
-    setLoginOpen(false)
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+      {/* Loading Overlay */}
+      {isLoggingIn && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-800 mb-4"></div>
+            <p className="text-gray-700 font-medium">Logging in...</p>
+            <p className="text-gray-500 text-sm mt-2">Please wait</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-md border-b-4 border-red-800">
         <div className="container mx-auto px-4 py-4">
@@ -111,18 +183,44 @@ export default function HomePage() {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="username">Username</Label>
-                      <Input id="username" type="text" required />
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
+                        disabled={isLoggingIn}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="password">Password</Label>
-                      <Input id="password" type="password" required />
+                      <Input
+                        id="password"
+                        type="password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                        disabled={isLoggingIn}
+                      />
                     </div>
+                    {loginError && (
+                      <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{loginError}</div>
+                    )}
                     <div className="flex justify-between">
-                      <Button type="submit" className="bg-red-800 hover:bg-red-700">
-                        Login
+                      <Button
+                        type="submit"
+                        className="bg-red-800 hover:bg-red-700"
+                        disabled={isLoggingIn}
+                      >
+                        {isLoggingIn ? "Logging in..." : "Login"}
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => setLoginOpen(false)}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setLoginOpen(false)}
+                        disabled={isLoggingIn}
+                      >
                         Cancel
                       </Button>
                     </div>

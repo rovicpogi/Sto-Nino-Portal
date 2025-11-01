@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -23,16 +23,51 @@ import {
   DollarSign,
 } from "lucide-react"
 
-
-
-
 export default function AdminPortal() {
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [adminData, setAdminData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // Load admin data from sessionStorage
+    const user = sessionStorage.getItem("user")
+    if (user) {
+      setAdminData(JSON.parse(user))
+    }
+    setIsLoading(false)
+  }, [])
 
   const handleLogout = () => {
+    sessionStorage.removeItem("user")
+    sessionStorage.removeItem("userType")
     if (confirm("Are you sure you want to log out?")) {
       window.location.href = "/"
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!adminData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600 mb-4">Please log in to access the Admin Portal</p>
+          <Link href="/">
+            <Button className="bg-red-800 hover:bg-red-700">Go to Login</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -65,8 +100,10 @@ export default function AdminPortal() {
                 </Button>
               </Link>
               <div className="text-right">
-                <p className="font-medium text-red-800">Admin User</p>
-                <p className="text-sm text-gray-600">System Administrator</p>
+                <p className="font-medium text-red-800">
+                  {adminData?.FirstName} {adminData?.LastName}
+                </p>
+                <p className="text-sm text-gray-600">{adminData?.Position || "System Administrator"}</p>
               </div>
               <Button
                 onClick={handleLogout}

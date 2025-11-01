@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -38,34 +38,6 @@ import {
   Home,
 } from "lucide-react"
 
-// Mock data
-const mockStudents = [
-  { id: 1, name: "Juan Dela Cruz", grade: "Grade 7-A", math: 85, english: 90, science: 88, filipino: 87 },
-  { id: 2, name: "Maria Santos", grade: "Grade 7-A", math: 92, english: 89, science: 91, filipino: 93 },
-  { id: 3, name: "Pedro Garcia", grade: "Grade 7-A", math: 78, english: 82, science: 80, filipino: 79 },
-  { id: 4, name: "Ana Reyes", grade: "Grade 7-A", math: 95, english: 94, science: 96, filipino: 92 },
-  { id: 5, name: "Carlos Lopez", grade: "Grade 7-A", math: 83, english: 85, science: 84, filipino: 86 },
-]
-
-const mockJournalEntries = [
-  {
-    id: 1,
-    date: "2024-01-15",
-    subject: "Mathematics",
-    topic: "Algebraic Expressions",
-    activities: "Introduced basic algebraic concepts, solved sample problems",
-    notes: "Students showed good understanding. Need more practice on word problems.",
-  },
-  {
-    id: 2,
-    date: "2024-01-14",
-    subject: "English",
-    topic: "Creative Writing",
-    activities: "Essay writing exercise on 'My Dream Vacation'",
-    notes: "Excellent creativity shown by most students. Grammar needs improvement.",
-  },
-]
-
 export default function TeacherPortal() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [selectedStudent, setSelectedStudent] = useState<any>(null)
@@ -77,9 +49,21 @@ export default function TeacherPortal() {
     notes: "",
   })
   const [showAddJournal, setShowAddJournal] = useState(false)
+  const [teacherData, setTeacherData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // Load teacher data from localStorage
+    const user = localStorage.getItem("teacher")
+    if (user) {
+      setTeacherData(JSON.parse(user))
+    }
+    setIsLoading(false)
+  }, [])
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out?")) {
+      localStorage.removeItem("teacher")
       window.location.href = "/"
     }
   }
@@ -93,6 +77,31 @@ export default function TeacherPortal() {
     console.log("Journal entry submitted:", journalEntry)
     setShowAddJournal(false)
     setJournalEntry({ date: "", subject: "", topic: "", activities: "", notes: "" })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-800 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!teacherData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600 mb-4">Please log in to access the Teacher Portal</p>
+          <Link href="/">
+            <Button className="bg-red-800 hover:bg-red-700">Go to Login</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -122,8 +131,12 @@ export default function TeacherPortal() {
                 </Button>
               </Link>
               <div className="text-right">
-                <p className="font-medium text-red-800">Prof. Maria Rodriguez</p>
-                <p className="text-sm text-gray-600">Mathematics & Science</p>
+                <p className="font-medium text-red-800">
+                  {teacherData?.first_name} {teacherData?.last_name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {teacherData?.subject || teacherData?.department || "Teacher"}
+                </p>
               </div>
               <Button
                 onClick={handleLogout}
@@ -299,101 +312,18 @@ export default function TeacherPortal() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Student Name</TableHead>
-                      <TableHead>Mathematics</TableHead>
-                      <TableHead>English</TableHead>
-                      <TableHead>Science</TableHead>
-                      <TableHead>Filipino</TableHead>
-                      <TableHead>Average</TableHead>
+                      <TableHead>Grade Level</TableHead>
+                      <TableHead>Section</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockStudents.map((student) => {
-                      const average = Math.round(
-                        (student.math + student.english + student.science + student.filipino) / 4,
-                      )
-                      return (
-                        <TableRow key={student.id}>
-                          <TableCell className="font-medium">{student.name}</TableCell>
-                          <TableCell>
-                            <Badge variant={student.math >= 85 ? "default" : "secondary"}>{student.math}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={student.english >= 85 ? "default" : "secondary"}>{student.english}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={student.science >= 85 ? "default" : "secondary"}>{student.science}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={student.filipino >= 85 ? "default" : "secondary"}>{student.filipino}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={average >= 85 ? "default" : "secondary"}>{average}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setSelectedStudent(student)}
-                                  className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white"
-                                >
-                                  <Edit className="w-4 h-4 mr-1" />
-                                  Edit
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Edit Grades - {student.name}</DialogTitle>
-                                  <DialogDescription>Update the student's grades for each subject</DialogDescription>
-                                </DialogHeader>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Label htmlFor="math">Mathematics</Label>
-                                    <Input id="math" type="number" defaultValue={student.math} min="0" max="100" />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="english">English</Label>
-                                    <Input
-                                      id="english"
-                                      type="number"
-                                      defaultValue={student.english}
-                                      min="0"
-                                      max="100"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="science">Science</Label>
-                                    <Input
-                                      id="science"
-                                      type="number"
-                                      defaultValue={student.science}
-                                      min="0"
-                                      max="100"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="filipino">Filipino</Label>
-                                    <Input
-                                      id="filipino"
-                                      type="number"
-                                      defaultValue={student.filipino}
-                                      min="0"
-                                      max="100"
-                                    />
-                                  </div>
-                                </div>
-                                <Button className="w-full bg-red-800 hover:bg-red-700">
-                                  <Save className="w-4 h-4 mr-2" />
-                                  Save Changes
-                                </Button>
-                              </DialogContent>
-                            </Dialog>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                        No student records found. Data will be loaded from database.
+                      </TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </CardContent>
@@ -487,35 +417,9 @@ export default function TeacherPortal() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockJournalEntries.map((entry) => (
-                    <Card key={entry.id} className="border-red-200">
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg text-red-800">{entry.subject}</CardTitle>
-                            <CardDescription>
-                              {entry.date} - {entry.topic}
-                            </CardDescription>
-                          </div>
-                          <Button size="sm" variant="outline" className="border-red-800 text-red-800">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div>
-                            <h4 className="font-medium text-red-800">Activities:</h4>
-                            <p className="text-gray-600">{entry.activities}</p>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-red-800">Notes:</h4>
-                            <p className="text-gray-600">{entry.notes}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  <div className="text-center text-gray-500 py-8">
+                    No journal entries found. Data will be loaded from database.
+                  </div>
                 </div>
               </CardContent>
             </Card>
