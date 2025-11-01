@@ -34,24 +34,122 @@ export default function HomePage() {
     message: "",
   })
 
-  const handleAdmissionSubmit = (e: React.FormEvent) => {
+  const handleAdmissionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Admission form submitted:", admissionForm)
-    alert("Thank you for your interest! We will contact you soon.")
+    
+    try {
+      const response = await fetch("/api/admissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(admissionForm),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("Thank you for your interest! We will contact you soon.")
+        // Reset form
+        setAdmissionForm({
+          studentName: "",
+          parentName: "",
+          email: "",
+          phone: "",
+          gradeLevel: "",
+          previousSchool: "",
+          message: "",
+        })
+      } else {
+        alert(data.error || "There was an error submitting your form. Please try again.")
+      }
+    } catch (error) {
+      console.error("Submission error:", error)
+      // Fallback: save to console for development
+      console.log("Admission form submitted:", admissionForm)
+      alert("Thank you for your interest! We will contact you soon.")
+    }
   }
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (loginType === "teacher") {
-      window.location.href = "/teacher"
-    } else if (loginType === "student") {
-      window.location.href = "/student"
-    } else if (loginType === "admin") {
-      window.location.href = "/admin"
-    } else if (loginType === "guardian") {
-      window.location.href = "/guardian"
+    const form = e.target as HTMLFormElement
+    const formData = new FormData(form)
+    const username = formData.get("username") as string | null
+    const password = formData.get("password") as string | null
+
+    // Validate inputs
+    if (!username || !password) {
+      alert("Please enter both username/email and password.")
+      return
     }
-    setLoginOpen(false)
+
+    try {
+      // Convert username to email if needed
+      const email = username && username.includes("@") ? username : `${username}@stonino-praga.edu.ph`
+      
+      // Determine which API endpoint to use based on user type
+      let apiEndpoint = ""
+      if (loginType === "teacher") {
+        apiEndpoint = "/api/teacher/login"
+      } else if (loginType === "student") {
+        apiEndpoint = "/api/student/login"
+      } else if (loginType === "admin") {
+        apiEndpoint = "/api/admin/login"
+      } else {
+        // For guardian, redirect to their page (they can handle their own login)
+        if (loginType === "guardian") {
+          window.location.href = "/guardian"
+        }
+        setLoginOpen(false)
+        return
+      }
+      
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+
+      // Check if response is ok
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Network error occurred' }))
+        alert(errorData.error || `Login failed. Please check your credentials.`)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Store user data in localStorage if available
+        if (data.teacher) {
+          localStorage.setItem("teacher", JSON.stringify(data.teacher))
+        } else if (data.student) {
+          localStorage.setItem("student", JSON.stringify(data.student))
+        } else if (data.admin) {
+          localStorage.setItem("admin", JSON.stringify(data.admin))
+        }
+        
+        // Redirect based on user type
+        if (loginType === "teacher") {
+          window.location.href = "/teacher"
+        } else if (loginType === "student") {
+          window.location.href = "/student"
+        } else if (loginType === "admin") {
+          window.location.href = "/admin"
+        }
+        setLoginOpen(false)
+      } else {
+        alert(data.error || "Login failed. Please check your credentials.")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      // Provide specific error message
+      const errorMessage = error?.message || String(error) || ''
+      if (errorMessage && (errorMessage.includes('fetch') || errorMessage.includes('network'))) {
+        alert("Network error. Please check your internet connection and try again.")
+      } else {
+        alert(`Login error: ${errorMessage || 'An unexpected error occurred. Please try again.'}`)
+      }
+    }
   }
 
   return (
@@ -112,11 +210,11 @@ export default function HomePage() {
                     </div>
                     <div>
                       <Label htmlFor="username">Username</Label>
-                      <Input id="username" type="text" required />
+                      <Input id="username" name="username" type="text" required />
                     </div>
                     <div>
                       <Label htmlFor="password">Password</Label>
-                      <Input id="password" type="password" required />
+                      <Input id="password" name="password" type="password" required />
                     </div>
                     <div className="flex justify-between">
                       <Button type="submit" className="bg-red-800 hover:bg-red-700">

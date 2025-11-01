@@ -43,7 +43,7 @@ export default function RegisterPage() {
 
       // optionally redirect after a short delay or immediately
       setTimeout(() => {
-        router.push('/(auth)/login') // or wherever you want
+        router.push('/auth/login') // or wherever you want
       }, 1500)
     } catch (err: any) {
       setError(err?.message ?? 'Unexpected error')
@@ -96,7 +96,7 @@ export default function RegisterPage() {
         {error && <p className="text-red-600">{error}</p>}
 
         <p className="text-sm text-gray-600">
-          Already have an account? <a className="text-indigo-600" href="/(auth)/login">Sign in</a>
+          Already have an account? <a className="text-indigo-600" href="/auth/login">Sign in</a>
         </p>
       </form>
     </div>

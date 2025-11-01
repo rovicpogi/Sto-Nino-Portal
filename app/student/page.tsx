@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   LayoutDashboard,
   GraduationCap,
@@ -17,44 +19,189 @@ import {
   Search,
   ChevronRight,
   Calendar,
+  LogOut,
+  Mail,
+  Lock,
 } from "lucide-react"
 
-// Mock data matching the image
-const mockAssignments = [
-  {
-    id: 1,
-    title: "Quadratic Equations Problem Set",
-    subject: "Mathematics",
-    dueDate: "Due: Dec 15, 2024",
-    status: "pending",
-    statusText: "Pending",
-  },
-  {
-    id: 2,
-    title: "Science Lab Report",
-    subject: "Science",
-    dueDate: "Due: Dec 18, 2024",
-    status: "submitted",
-    statusText: "Submitted",
-  },
-  {
-    id: 3,
-    title: "Essay on Philippine Literature",
-    subject: "Filipino",
-    dueDate: "Due: Dec 20, 2024",
-    status: "pending",
-    statusText: "Pending",
-  },
-]
-
-const mockCourseProgress = [
-  { subject: "Advanced Mathematics", progress: 75 },
-  { subject: "General Science", progress: 60 },
-  { subject: "English Literature", progress: 85 },
-]
+interface Student {
+  id: number
+  email: string
+  name?: string
+  first_name?: string
+  last_name?: string
+  student_id?: string
+  grade_level?: string
+  section?: string
+  [key: string]: any
+}
 
 export default function StudentDashboard() {
+  const [student, setStudent] = useState<Student | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [activeNav, setActiveNav] = useState("dashboard")
+
+  // Check if student is logged in on component mount
+  useEffect(() => {
+    const storedStudent = localStorage.getItem("student")
+    if (storedStudent) {
+      try {
+        const studentData = JSON.parse(storedStudent)
+        setStudent(studentData)
+      } catch (error) {
+        console.error("Error parsing stored student data:", error)
+        localStorage.removeItem("student")
+      }
+    }
+    setIsLoading(false)
+  }, [])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+
+    try {
+      const response = await fetch("/api/student/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      })
+
+      // Check if response is ok
+      if (!response.ok) {
+        // Try to parse error message
+        const errorData = await response.json().catch(() => ({ error: 'Network error occurred' }))
+        setLoginError(errorData.error || `Server error (${response.status}). Please try again.`)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.student) {
+        setStudent(data.student)
+        localStorage.setItem("student", JSON.stringify(data.student))
+        setLoginEmail("")
+        setLoginPassword("")
+        setLoginError(null)
+      } else {
+        setLoginError(data.error || "Login failed. Please check your credentials.")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      // Provide more specific error messages
+      const errorMessage = error?.message || String(error) || ''
+      if (errorMessage && (errorMessage.includes('fetch') || errorMessage.includes('network'))) {
+        setLoginError("Network error. Please check your internet connection and try again.")
+      } else if (errorMessage && errorMessage.includes('Failed to fetch')) {
+        setLoginError("Cannot connect to the server. Please make sure the server is running.")
+      } else {
+        setLoginError(`An error occurred: ${errorMessage || 'Please try again.'}`)
+      }
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
+  const handleLogout = () => {
+    if (confirm("Are you sure you want to log out?")) {
+      localStorage.removeItem("student")
+      setStudent(null)
+      window.location.href = "/"
+    }
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-bold text-gray-800">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login form if not authenticated
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md border-gray-200">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Image
+                src="/logo.png"
+                alt="Sto Niño de Praga Academy Logo"
+                width={80}
+                height={80}
+                className="rounded-full"
+              />
+            </div>
+            <CardTitle className="text-2xl font-bold text-gray-800">Student Login</CardTitle>
+            <CardDescription>Sto Niño de Praga Academy</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-800">
+                  <Mail className="w-4 h-4 inline mr-2" />
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="student@example.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  required
+                  className="border-gray-200"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-800">
+                  <Lock className="w-4 h-4 inline mr-2" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                  className="border-gray-200"
+                />
+              </div>
+              {loginError && (
+                <div className="text-red-600 text-sm bg-red-50 p-2 rounded">
+                  {loginError}
+                </div>
+              )}
+              <Button
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full bg-red-800 hover:bg-red-700"
+              >
+                {isLoggingIn ? "Logging in..." : "Login"}
+              </Button>
+              <div className="text-center">
+                <Link href="/">
+                  <Button type="button" variant="outline" className="border-gray-300 text-gray-700">
+                    <Home className="w-4 h-4 mr-2" />
+                    Back to Home
+                  </Button>
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -87,14 +234,34 @@ export default function StudentDashboard() {
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
+            <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                MT
+                  {student.name 
+                    ? student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                    : student.first_name && student.last_name
+                    ? `${student.first_name[0]}${student.last_name[0]}`.toUpperCase()
+                    : student.email[0].toUpperCase()}
               </div>
               <div className="text-sm">
-                <p className="font-medium text-gray-800">Miguel Torres</p>
+                  <p className="font-medium text-gray-800">
+                    {student.name || 
+                     (student.first_name && student.last_name 
+                       ? `${student.first_name} ${student.last_name}` 
+                       : student.email)}
+                  </p>
                 <p className="text-xs text-gray-500">Student</p>
+                </div>
               </div>
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-red-600"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>
@@ -183,7 +350,12 @@ export default function StudentDashboard() {
             <div className="space-y-6">
               {/* Welcome Section */}
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back, Miguel Torres!</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                  Welcome back, {student.name || 
+                    (student.first_name && student.last_name 
+                      ? `${student.first_name} ${student.last_name}` 
+                      : 'Student')}!
+                </h2>
                 <p className="text-gray-600">Here's your academic overview for today.</p>
               </div>
 
@@ -196,10 +368,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="text-2xl font-bold text-gray-900">3.85</div>
+                    <div className="text-2xl font-bold text-gray-900">-</div>
                     <div className="flex items-center mt-1">
-                      <ChevronRight className="w-3 h-3 text-green-500" />
-                      <span className="text-xs text-green-600 ml-1">Excellent</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 ml-1">Not available</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -211,10 +383,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="text-2xl font-bold text-gray-900">95.5%</div>
+                    <div className="text-2xl font-bold text-gray-900">-</div>
                     <div className="flex items-center mt-1">
-                      <ChevronRight className="w-3 h-3 text-blue-500" />
-                      <span className="text-xs text-blue-600 ml-1">Great</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 ml-1">Not available</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -226,10 +398,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="text-2xl font-bold text-gray-900">5</div>
+                    <div className="text-2xl font-bold text-gray-900">-</div>
                     <div className="flex items-center mt-1">
-                      <ChevronRight className="w-3 h-3 text-purple-500" />
-                      <span className="text-xs text-purple-600 ml-1">This semester</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 ml-1">Not available</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -241,10 +413,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <div className="text-2xl font-bold text-gray-900">3</div>
+                    <div className="text-2xl font-bold text-gray-900">-</div>
                     <div className="flex items-center mt-1">
-                      <ChevronRight className="w-3 h-3 text-orange-500" />
-                      <span className="text-xs text-orange-600 ml-1">Due soon</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 ml-1">Not available</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -261,29 +433,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      {mockAssignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
-                        >
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900 text-sm">{assignment.title}</h4>
-                            <p className="text-xs text-gray-600">{assignment.subject}</p>
-                            <p className="text-xs text-gray-500">{assignment.dueDate}</p>
-                          </div>
-                          <Badge
-                            variant={assignment.status === "submitted" ? "default" : "destructive"}
-                            className={`text-xs ${
-                              assignment.status === "submitted"
-                                ? "bg-green-100 text-green-700 hover:bg-green-100"
-                                : "bg-red-100 text-red-700 hover:bg-red-100"
-                            }`}
-                          >
-                            {assignment.statusText}
-                          </Badge>
-                        </div>
-                      ))}
+                    <div className="text-center py-12">
+                      <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600">No assignments available.</p>
+                      <p className="text-sm text-gray-500 mt-2">Assignments will be loaded from the database.</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -297,16 +450,10 @@ export default function StudentDashboard() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {mockCourseProgress.map((course, index) => (
-                        <div key={index}>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm font-medium text-gray-700">{course.subject}</span>
-                            <span className="text-sm text-gray-500">{course.progress}%</span>
-                          </div>
-                          <Progress value={course.progress} className="h-2 bg-gray-200" />
-                        </div>
-                      ))}
+                    <div className="text-center py-12">
+                      <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600">No course progress data available.</p>
+                      <p className="text-sm text-gray-500 mt-2">Course progress will be loaded from the database.</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -327,13 +474,17 @@ export default function StudentDashboard() {
                     <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
                       <div>
                         <h4 className="font-medium text-green-800">Enrollment Status</h4>
-                        <p className="text-sm text-green-600">Currently Enrolled - Grade 10</p>
+                        <p className="text-sm text-green-600">
+                          {student.grade_level 
+                            ? `Currently Enrolled - ${student.grade_level}` 
+                            : 'Enrollment status will be loaded from the database'}
+                        </p>
                       </div>
                       <Badge className="bg-green-100 text-green-800">Active</Badge>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <h4 className="font-medium text-gray-800">Academic Year</h4>
-                      <p className="text-sm text-gray-600">2024-2025</p>
+                      <p className="text-sm text-gray-600">Academic year information will be loaded from the database.</p>
                     </div>
                   </div>
                 </CardContent>
@@ -409,37 +560,10 @@ export default function StudentDashboard() {
                   <CardDescription>Your grades for the current semester</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="font-medium text-blue-800">Mathematics</h4>
-                      <p className="text-2xl font-bold text-blue-600">92</p>
-                      <p className="text-sm text-blue-600">Excellent</p>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <h4 className="font-medium text-green-800">Science</h4>
-                      <p className="text-2xl font-bold text-green-600">88</p>
-                      <p className="text-sm text-green-600">Very Good</p>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <h4 className="font-medium text-purple-800">English</h4>
-                      <p className="text-2xl font-bold text-purple-600">90</p>
-                      <p className="text-sm text-purple-600">Excellent</p>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <h4 className="font-medium text-orange-800">Filipino</h4>
-                      <p className="text-2xl font-bold text-orange-600">87</p>
-                      <p className="text-sm text-orange-600">Very Good</p>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <h4 className="font-medium text-red-800">Social Studies</h4>
-                      <p className="text-2xl font-bold text-red-600">89</p>
-                      <p className="text-sm text-red-600">Very Good</p>
-                    </div>
-                    <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-                      <h4 className="font-medium text-indigo-800">Physical Education</h4>
-                      <p className="text-2xl font-bold text-indigo-600">95</p>
-                      <p className="text-sm text-indigo-600">Outstanding</p>
-                    </div>
+                  <div className="text-center py-12">
+                    <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No grades available.</p>
+                    <p className="text-sm text-gray-500 mt-2">Grades will be loaded from the database.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -458,28 +582,77 @@ export default function StudentDashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                      <p className="text-gray-900">Miguel Torres</p>
+                      <p className="text-gray-900">
+                        {student.name || 
+                         (student.first_name && student.last_name 
+                           ? `${student.first_name} ${student.last_name}` 
+                           : "Not provided")}
+                      </p>
                     </div>
+                    {student.first_name && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                        <p className="text-gray-900">{student.first_name}</p>
+                      </div>
+                    )}
+                    {student.last_name && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                        <p className="text-gray-900">{student.last_name}</p>
+                      </div>
+                    )}
+                    {student.student_id && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-                      <p className="text-gray-900">2024-001234</p>
+                        <p className="text-gray-900">{student.student_id}</p>
                     </div>
+                    )}
+                    {student.grade_level && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
-                      <p className="text-gray-900">Grade 10</p>
+                        <p className="text-gray-900">{student.grade_level}</p>
                     </div>
+                    )}
+                    {student.section && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                      <p className="text-gray-900">St. Joseph</p>
+                        <p className="text-gray-900">{student.section}</p>
                     </div>
+                    )}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <p className="text-gray-900">miguel.torres@student.stonino-praga.edu.ph</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                        <Mail className="w-4 h-4 mr-1" />
+                        Email
+                      </label>
+                      <p className="text-gray-900">{student.email}</p>
                     </div>
+                    {(student.phone || student.contact_number) && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
-                      <p className="text-gray-900">0917-123-4567</p>
+                        <p className="text-gray-900">{student.phone || student.contact_number}</p>
+                      </div>
+                    )}
+                    {(student.address) && (
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <p className="text-gray-900">{student.address}</p>
+                      </div>
+                    )}
+                    {/* Display any additional fields */}
+                    {Object.entries(student)
+                      .filter(([key]) => 
+                        !['id', 'email', 'password', 'Password', 'name', 'first_name', 'last_name', 
+                          'student_id', 'grade_level', 'section', 'phone', 'contact_number', 'address'].includes(key))
+                      .map(([key, value]) => (
+                        value && (
+                          <div key={key}>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
+                              {key.replace(/_/g, ' ')}
+                            </label>
+                            <p className="text-gray-900">{String(value)}</p>
                     </div>
+                        )
+                      ))}
                   </div>
                 </CardContent>
               </Card>

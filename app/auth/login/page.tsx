@@ -111,7 +111,7 @@ export default function LoginPage() {
         {error && <p className="text-red-600">{error}</p>}
 
         <p className="text-sm text-gray-600">
-          No account yet? <a className="text-indigo-600" href="/(auth)/register">Register</a>
+          No account yet? <a className="text-indigo-600" href="/auth/register">Register</a>
         </p>
       </form>
     </div>
