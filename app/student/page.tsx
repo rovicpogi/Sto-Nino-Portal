@@ -181,15 +181,6 @@ export default function StudentDashboard() {
                 Profile
               </button>
             </div>
-
-            <div className="mt-8 px-4">
-              <Link href="/">
-                <Button variant="ghost" className="w-full justify-start text-gray-700 hover:bg-gray-50" size="sm">
-                  <Home className="w-4 h-4 mr-3" />
-                  Back to Home
-                </Button>
-              </Link>
-            </div>
           </nav>
         </aside>
 
@@ -283,15 +274,6 @@ export default function StudentDashboard() {
                     <User className="w-4 h-4 mr-3" />
                     Profile
                   </button>
-                </div>
-
-                <div className="mt-8 px-4">
-                  <Link href="/">
-                    <Button variant="ghost" className="w-full justify-start text-gray-700 hover:bg-gray-50" size="sm">
-                      <Home className="w-4 h-4 mr-3" />
-                      Back to Home
-                    </Button>
-                  </Link>
                 </div>
 
                 {/* Mobile User Info */}
