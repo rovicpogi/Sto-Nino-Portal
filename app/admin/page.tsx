@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -21,18 +21,299 @@ import {
   FileText,
   Calendar,
   DollarSign,
+  Lock,
+  Mail,
 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+interface Admin {
+  id: number
+  email: string
+  name?: string
+  first_name?: string
+  last_name?: string
+  [key: string]: any
+}
 
-
+interface Student {
+  id: number
+  name: string
+  student_id: string
+  grade_level: string
+  section: string
+  email?: string
+  phone?: string
+  status?: string
+  created_at?: string
+}
 
 export default function AdminPortal() {
+  const [admin, setAdmin] = useState<Admin | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [newStudent, setNewStudent] = useState({
+    name: "",
+    studentId: "",
+    gradeLevel: "",
+    section: "",
+    email: "",
+    phone: "",
+  })
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalTeachers: 0,
+    attendanceRate: 0,
+  })
+  const [students, setStudents] = useState<Student[]>([])
+  const [loadingStats, setLoadingStats] = useState(false)
+  const [loadingStudents, setLoadingStudents] = useState(false)
+
+  // Fetch stats from API
+  const fetchStats = async () => {
+    setLoadingStats(true)
+    try {
+      const response = await fetch("/api/admin/stats")
+      const result = await response.json()
+      if (result.success && result.data) {
+        setStats(result.data)
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+    } finally {
+      setLoadingStats(false)
+    }
+  }
+
+  // Fetch students from API
+  const fetchStudents = async () => {
+    setLoadingStudents(true)
+    try {
+      const response = await fetch("/api/admin/students")
+      const result = await response.json()
+      if (result.success && result.students) {
+        setStudents(result.students)
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error)
+    } finally {
+      setLoadingStudents(false)
+    }
+  }
+
+  // Check if admin is logged in on component mount
+  useEffect(() => {
+    const storedAdmin = localStorage.getItem("admin")
+    if (storedAdmin) {
+      try {
+        const adminData = JSON.parse(storedAdmin)
+        setAdmin(adminData)
+        // Fetch data after admin is loaded
+        fetchStats()
+        fetchStudents()
+      } catch (error) {
+        console.error("Error parsing stored admin data:", error)
+        localStorage.removeItem("admin")
+      }
+    }
+    setIsLoading(false)
+  }, [])
+
+  // Fetch students when tab changes to students
+  useEffect(() => {
+    if (admin && activeTab === "students") {
+      fetchStudents()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      })
+
+      // Check if response is ok
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Network error occurred' }))
+        setLoginError(errorData.error || `Server error (${response.status}). Please try again.`)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.admin) {
+        setAdmin(data.admin)
+        localStorage.setItem("admin", JSON.stringify(data.admin))
+        setLoginEmail("")
+        setLoginPassword("")
+        setLoginError(null)
+        // Fetch data after successful login
+        fetchStats()
+        fetchStudents()
+      } else {
+        setLoginError(data.error || "Login failed. Please check your credentials.")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      const errorMessage = error?.message || String(error) || ''
+      if (errorMessage && (errorMessage.includes('fetch') || errorMessage.includes('network'))) {
+        setLoginError("Network error. Please check your internet connection and try again.")
+      } else if (errorMessage && errorMessage.includes('Failed to fetch')) {
+        setLoginError("Cannot connect to the server. Please make sure the server is running.")
+      } else {
+        setLoginError(`An error occurred: ${errorMessage || 'Please try again.'}`)
+      }
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out?")) {
+      localStorage.removeItem("admin")
+      setAdmin(null)
       window.location.href = "/"
     }
+  }
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    try {
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newStudent),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("Student added successfully!")
+        setShowAddStudent(false)
+        setNewStudent({
+          name: "",
+          studentId: "",
+          gradeLevel: "",
+          section: "",
+          email: "",
+          phone: "",
+        })
+        // Refresh the students list
+        fetchStudents()
+        fetchStats()
+      } else {
+        alert(data.error || "Failed to add student. Please try again.")
+      }
+    } catch (error) {
+      console.error("Add student error:", error)
+      alert("Error adding student. Please try again.")
+    }
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-bold text-red-800">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login form if not authenticated
+  if (!admin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md border-gray-200">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Image
+                src="/logo.png"
+                alt="Sto Niño de Praga Academy Logo"
+                width={80}
+                height={80}
+                className="rounded-full"
+              />
+            </div>
+            <CardTitle className="text-2xl font-bold text-gray-800">Admin Login</CardTitle>
+            <CardDescription>Sto Niño de Praga Academy</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-800">
+                  <Mail className="w-4 h-4 inline mr-2" />
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="border-gray-300"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-800">
+                  <Lock className="w-4 h-4 inline mr-2" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="border-gray-300"
+                />
+              </div>
+              {loginError && (
+                <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+                  {loginError}
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full bg-red-800 hover:bg-red-700"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? "Logging in..." : "Login"}
+              </Button>
+              <div className="text-center">
+                <Link href="/" className="text-sm text-gray-600 hover:text-red-800">
+                  <Home className="w-4 h-4 inline mr-1" />
+                  Back to Home
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -65,7 +346,9 @@ export default function AdminPortal() {
                 </Button>
               </Link>
               <div className="text-right">
-                <p className="font-medium text-red-800">Admin User</p>
+                <p className="font-medium text-red-800">
+                  {admin.name || admin.first_name || admin.email || "Admin User"}
+                </p>
                 <p className="text-sm text-gray-600">System Administrator</p>
               </div>
               <Button
@@ -115,7 +398,9 @@ export default function AdminPortal() {
                   <Users className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">1,247</div>
+                  <div className="text-2xl font-bold text-red-800">
+                    {loadingStats ? "..." : stats.totalStudents.toLocaleString()}
+                  </div>
                   <p className="text-xs text-gray-600">All grade levels</p>
                 </CardContent>
               </Card>
@@ -126,7 +411,9 @@ export default function AdminPortal() {
                   <Shield className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">65</div>
+                  <div className="text-2xl font-bold text-red-800">
+                    {loadingStats ? "..." : stats.totalTeachers.toLocaleString()}
+                  </div>
                   <p className="text-xs text-gray-600">Active teachers</p>
                 </CardContent>
               </Card>
@@ -273,7 +560,96 @@ export default function AdminPortal() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Student Records</h4>
-                    <Button className="bg-red-800 hover:bg-red-700">Add New Student</Button>
+                    <Dialog open={showAddStudent} onOpenChange={setShowAddStudent}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-red-800 hover:bg-red-700">Add New Student</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle className="text-red-800">Add New Student</DialogTitle>
+                          <DialogDescription>Enter the student's information to add them to the system</DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleAddStudent} className="space-y-4">
+                          <div>
+                            <Label htmlFor="studentName">Full Name *</Label>
+                            <Input
+                              id="studentName"
+                              value={newStudent.name}
+                              onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="studentId">Student ID *</Label>
+                            <Input
+                              id="studentId"
+                              value={newStudent.studentId}
+                              onChange={(e) => setNewStudent({ ...newStudent, studentId: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="gradeLevel">Grade Level *</Label>
+                              <Select onValueChange={(value) => setNewStudent({ ...newStudent, gradeLevel: value })}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select grade" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="grade1">Grade 1</SelectItem>
+                                  <SelectItem value="grade2">Grade 2</SelectItem>
+                                  <SelectItem value="grade3">Grade 3</SelectItem>
+                                  <SelectItem value="grade4">Grade 4</SelectItem>
+                                  <SelectItem value="grade5">Grade 5</SelectItem>
+                                  <SelectItem value="grade6">Grade 6</SelectItem>
+                                  <SelectItem value="grade7">Grade 7</SelectItem>
+                                  <SelectItem value="grade8">Grade 8</SelectItem>
+                                  <SelectItem value="grade9">Grade 9</SelectItem>
+                                  <SelectItem value="grade10">Grade 10</SelectItem>
+                                  <SelectItem value="grade11">Grade 11</SelectItem>
+                                  <SelectItem value="grade12">Grade 12</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label htmlFor="section">Section *</Label>
+                              <Input
+                                id="section"
+                                value={newStudent.section}
+                                onChange={(e) => setNewStudent({ ...newStudent, section: e.target.value })}
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={newStudent.email}
+                              onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="phone">Phone Number</Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              value={newStudent.phone}
+                              onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <Button type="button" variant="outline" onClick={() => setShowAddStudent(false)}>
+                              Cancel
+                            </Button>
+                            <Button type="submit" className="bg-red-800 hover:bg-red-700">
+                              Add Student
+                            </Button>
+                          </div>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                   <Table>
                     <TableHeader>
@@ -286,33 +662,33 @@ export default function AdminPortal() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell>2024-001234</TableCell>
-                        <TableCell>Miguel Torres</TableCell>
-                        <TableCell>Grade 10</TableCell>
-                        <TableCell>St. Joseph</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>2024-001235</TableCell>
-                        <TableCell>Ana Garcia</TableCell>
-                        <TableCell>Grade 9</TableCell>
-                        <TableCell>St. Mary</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>2024-001236</TableCell>
-                        <TableCell>Carlos Mendoza</TableCell>
-                        <TableCell>Grade 8</TableCell>
-                        <TableCell>St. Peter</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
+                      {loadingStudents ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-500">
+                            Loading students...
+                          </TableCell>
+                        </TableRow>
+                      ) : students.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-500">
+                            No students found. Add a student to get started.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        students.map((student) => (
+                          <TableRow key={student.id}>
+                            <TableCell>{student.student_id || "N/A"}</TableCell>
+                            <TableCell>{student.name || "N/A"}</TableCell>
+                            <TableCell>{student.grade_level || "N/A"}</TableCell>
+                            <TableCell>{student.section || "N/A"}</TableCell>
+                            <TableCell>
+                              <Badge className="bg-green-100 text-green-800">
+                                {student.status || "Enrolled"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
