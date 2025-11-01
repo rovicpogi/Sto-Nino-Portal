@@ -138,14 +138,6 @@ export default function TeacherPortal() {
                   {teacherData?.subject || teacherData?.department || "Teacher"}
                 </p>
               </div>
-              <Button
-                onClick={handleLogout}
-                variant="outline"
-                className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white text-xs sm:text-sm"
-              >
-                <LogOut className="w-4 h-4 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">Log Out</span>
-              </Button>
             </div>
           </div>
         </div>
@@ -154,7 +146,7 @@ export default function TeacherPortal() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-4 sm:py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-8 gap-1">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-4 sm:mb-8 gap-1">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <LayoutDashboard className="w-4 h-4 mr-2" />
               Dashboard
@@ -166,10 +158,6 @@ export default function TeacherPortal() {
             <TabsTrigger value="journal" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <BookOpen className="w-4 h-4 mr-2" />
               Teaching Journal
-            </TabsTrigger>
-            <TabsTrigger value="logout" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
-              <LogOut className="w-4 h-4 mr-2" />
-              Log Out
             </TabsTrigger>
           </TabsList>
 
@@ -420,25 +408,6 @@ export default function TeacherPortal() {
                   <div className="text-center text-gray-500 py-8">
                     No journal entries found. Data will be loaded from database.
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Logout Tab */}
-          <TabsContent value="logout" className="space-y-6">
-            <Card className="text-center py-12">
-              <CardContent>
-                <LogOut className="w-16 h-16 text-red-800 mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-red-800 mb-4">Logout Confirmation</h3>
-                <p className="text-gray-600 mb-6">Are you sure you want to log out of the Teacher Portal?</p>
-                <div className="space-x-4">
-                  <Button onClick={handleLogout} className="bg-red-800 hover:bg-red-700">
-                    Yes, Log Out
-                  </Button>
-                  <Button variant="outline" onClick={() => setActiveTab("dashboard")}>
-                    Cancel
-                  </Button>
                 </div>
               </CardContent>
             </Card>
