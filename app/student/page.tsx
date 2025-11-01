@@ -19,6 +19,7 @@ import {
   Calendar,
   Menu,
   X,
+  LogOut,
 } from "lucide-react"
 
 export default function StudentDashboard() {
@@ -35,6 +36,13 @@ export default function StudentDashboard() {
     }
     setIsLoading(false)
   }, [])
+
+  const handleLogout = () => {
+    if (confirm("Are you sure you want to log out?")) {
+      localStorage.removeItem("student")
+      window.location.href = "/"
+    }
+  }
 
   if (isLoading) {
     return (
@@ -91,6 +99,15 @@ export default function StudentDashboard() {
             </div>
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout}
+              className="hidden sm:flex"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Log Out
             </Button>
             <div className="flex items-center space-x-2 hidden sm:flex">
               <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
@@ -277,7 +294,7 @@ export default function StudentDashboard() {
                 </div>
 
                 {/* Mobile User Info */}
-                <div className="mt-8 px-4 py-4 border-t border-gray-200">
+                <div className="mt-8 px-4 py-4 border-t border-gray-200 space-y-3">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white font-medium">
                       {studentData?.first_name?.[0] || 'S'}{studentData?.last_name?.[0] || 'T'}
@@ -289,6 +306,14 @@ export default function StudentDashboard() {
                       <p className="text-sm text-gray-500">Student</p>
                     </div>
                   </div>
+                  <Button
+                    onClick={handleLogout}
+                    variant="ghost"
+                    className="w-full justify-start text-red-600 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Log Out
+                  </Button>
                 </div>
               </nav>
             </div>
