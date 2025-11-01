@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { GraduationCap, Users, BookOpen, Award, Phone, Mail, MapPin } from "lucide-react"
+import { GraduationCap, Users, BookOpen, Award, Phone, Mail, MapPin, Menu, X } from "lucide-react"
 
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
@@ -28,6 +28,7 @@ export default function HomePage() {
   const [loginPassword, setLoginPassword] = useState("")
   const [loginError, setLoginError] = useState("")
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [admissionForm, setAdmissionForm] = useState({
     studentName: "",
     parentName: "",
@@ -132,17 +133,17 @@ export default function HomePage() {
       <header className="bg-white shadow-md border-b-4 border-red-800">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Image
                 src="/logo.png"
                 alt="Sto Niño de Praga Academy Logo"
                 width={80}
                 height={80}
-                className="rounded-full"
+                className="rounded-full hidden sm:block"
               />
               <div>
-                <h1 className="text-2xl font-bold text-red-800">Sto Niño de Praga Academy</h1>
-                <p className="text-sm text-gray-600">Excellence in Education Since 1998</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-red-800">Sto Niño de Praga Academy</h1>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Excellence in Education Since 1998</p>
               </div>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
@@ -228,15 +229,70 @@ export default function HomePage() {
                 </DialogContent>
               </Dialog>
             </nav>
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="text-red-800"
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </Button>
+            </div>
           </div>
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-4 pb-4 border-t border-gray-200">
+              <nav className="flex flex-col space-y-3 pt-4">
+                <a 
+                  href="#home" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Home
+                </a>
+                <a 
+                  href="#about" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  About
+                </a>
+                <a 
+                  href="#admissions" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Admissions
+                </a>
+                <a 
+                  href="#contact" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Contact
+                </a>
+                <Button
+                  className="bg-red-800 hover:bg-red-700 text-white w-full mt-2"
+                  onClick={() => {
+                    setMobileMenuOpen(false)
+                    setLoginOpen(true)
+                  }}
+                >
+                  Login
+                </Button>
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Hero Section */}
-      <section id="home" className="py-20 bg-gradient-to-r from-red-800 to-red-900 text-white">
+      <section id="home" className="py-12 sm:py-20 bg-gradient-to-r from-red-800 to-red-900 text-white">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-5xl font-bold mb-6">Welcome to Excellence</h2>
-          <p className="text-xl mb-8 max-w-3xl mx-auto">
+          <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6">Welcome to Excellence</h2>
+          <p className="text-base sm:text-xl mb-6 sm:mb-8 max-w-3xl mx-auto">
             Nurturing young minds with quality education, strong values, and Christian principles since 1998. Join our
             community of learners and achievers.
           </p>
@@ -262,11 +318,11 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section id="about" className="py-16 bg-amber-50">
+      <section id="about" className="py-12 sm:py-16 bg-amber-50">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-red-800 mb-4">Why Choose Our Academy?</h3>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+          <div className="text-center mb-8 sm:mb-12">
+            <h3 className="text-2xl sm:text-3xl font-bold text-red-800 mb-4">Why Choose Our Academy?</h3>
+            <p className="text-gray-600 max-w-2xl mx-auto text-sm sm:text-base">
               We provide a comprehensive education that develops not just academic excellence, but also character,
               leadership, and spiritual growth.
             </p>
