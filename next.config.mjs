@@ -9,11 +9,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Performance optimizations
-  swcMinify: true,
-  experimental: {
-    optimizeCss: true,
-  },
   // Reduce bundle size
   webpack: (config, { isServer }) => {
     if (!isServer) {
