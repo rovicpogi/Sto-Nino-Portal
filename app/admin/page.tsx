@@ -29,17 +29,16 @@ export default function AdminPortal() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Load admin data from sessionStorage
-    const user = sessionStorage.getItem("user")
-    if (user) {
-      setAdminData(JSON.parse(user))
+    // Load admin data from localStorage
+    const admin = localStorage.getItem("admin")
+    if (admin) {
+      setAdminData(JSON.parse(admin))
     }
     setIsLoading(false)
   }, [])
 
   const handleLogout = () => {
-    sessionStorage.removeItem("user")
-    sessionStorage.removeItem("userType")
+    localStorage.removeItem("admin")
     if (confirm("Are you sure you want to log out?")) {
       window.location.href = "/"
     }

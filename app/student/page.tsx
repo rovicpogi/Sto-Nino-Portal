@@ -25,10 +25,10 @@ export default function StudentDashboard() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Load student data from sessionStorage
-    const user = sessionStorage.getItem("user")
-    if (user) {
-      setStudentData(JSON.parse(user))
+    // Load student data from localStorage
+    const student = localStorage.getItem("student")
+    if (student) {
+      setStudentData(JSON.parse(student))
     }
     setIsLoading(false)
   }, [])

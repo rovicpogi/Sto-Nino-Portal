@@ -17,21 +17,37 @@ export async function POST(request: Request) {
     const admin = getSupabaseAdmin()
 
     // Query the Admin table (note: case-sensitive table name)
-    const { data: adminUser, error } = await admin
+    const emailLower = email.toLowerCase().trim()
+    const { data: admins, error } = await admin
       .from('Admin')
       .select('*')
-      .eq('Email', email)
-      .single()
+      .limit(10)
 
-    if (error || !adminUser) {
+    if (error) {
+      console.error('Database error:', error)
+      return NextResponse.json(
+        { ok: false, error: 'Database connection error. Please try again.' },
+        { status: 500 }
+      )
+    }
+
+    // Find admin by email (case-insensitive)
+    const adminUser = admins?.find((a: any) => 
+      (a.Email || a.email) && (a.Email || a.email).toString().toLowerCase().trim() === emailLower
+    )
+
+    if (!adminUser) {
       return NextResponse.json(
         { ok: false, error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // Compare password (assuming plain text for now - in production, use bcrypt or similar)
-    if (adminUser.Password !== password) {
+    // Check for Password field (both lowercase and capitalized)
+    const adminPassword = adminUser.Password !== undefined ? adminUser.Password : 
+                         adminUser.password !== undefined ? adminUser.password : null
+
+    if (!adminPassword || adminPassword !== password) {
       return NextResponse.json(
         { ok: false, error: 'Invalid email or password' },
         { status: 401 }
@@ -39,11 +55,13 @@ export async function POST(request: Request) {
     }
 
     // Return admin data (excluding password)
-    const { Password: _, ...adminData } = adminUser
+    const adminWithoutPassword = { ...adminUser }
+    if (adminWithoutPassword.Password !== undefined) delete adminWithoutPassword.Password
+    if (adminWithoutPassword.password !== undefined) delete adminWithoutPassword.password
 
     return NextResponse.json({
       ok: true,
-      user: adminData,
+      user: adminWithoutPassword,
       userType: 'admin',
     })
   } catch (e: any) {
