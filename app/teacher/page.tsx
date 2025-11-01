@@ -51,6 +51,14 @@ export default function TeacherPortal() {
   const [showAddJournal, setShowAddJournal] = useState(false)
   const [teacherData, setTeacherData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [dashboardStats, setDashboardStats] = useState({
+    totalStudents: 0,
+    classesToday: 0,
+    pendingGrades: 0,
+    journalEntries: 0,
+    todaySchedule: [] as any[],
+    announcements: [] as any[],
+  })
 
   useEffect(() => {
     // Load teacher data from localStorage
@@ -60,6 +68,24 @@ export default function TeacherPortal() {
     }
     setIsLoading(false)
   }, [])
+
+  useEffect(() => {
+    // Fetch dashboard stats when component loads and teacherData is available
+    if (teacherData && activeTab === "dashboard") {
+      const fetchStats = async () => {
+        try {
+          const response = await fetch("/api/teacher/stats")
+          const result = await response.json()
+          if (result.success) {
+            setDashboardStats(result.data)
+          }
+        } catch (error) {
+          console.error("Failed to fetch teacher stats:", error)
+        }
+      }
+      fetchStats()
+    }
+  }, [teacherData, activeTab])
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out?")) {
@@ -170,7 +196,7 @@ export default function TeacherPortal() {
                   <Users className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">32</div>
+                  <div className="text-2xl font-bold text-red-800">{dashboardStats.totalStudents}</div>
                   <p className="text-xs text-gray-600">Across all classes</p>
                 </CardContent>
               </Card>
@@ -181,8 +207,8 @@ export default function TeacherPortal() {
                   <Calendar className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">5</div>
-                  <p className="text-xs text-gray-600">Mathematics & Science</p>
+                  <div className="text-2xl font-bold text-red-800">{dashboardStats.classesToday}</div>
+                  <p className="text-xs text-gray-600">{teacherData?.subject || "Scheduled classes"}</p>
                 </CardContent>
               </Card>
 
@@ -192,7 +218,7 @@ export default function TeacherPortal() {
                   <FileText className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">8</div>
+                  <div className="text-2xl font-bold text-red-800">{dashboardStats.pendingGrades}</div>
                   <p className="text-xs text-gray-600">Need to be updated</p>
                 </CardContent>
               </Card>
@@ -203,7 +229,7 @@ export default function TeacherPortal() {
                   <BookOpen className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">15</div>
+                  <div className="text-2xl font-bold text-red-800">{dashboardStats.journalEntries}</div>
                   <p className="text-xs text-gray-600">This month</p>
                 </CardContent>
               </Card>
@@ -216,29 +242,23 @@ export default function TeacherPortal() {
                   <CardTitle className="text-red-800">Today's Schedule</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <Clock className="w-4 h-4 text-red-600" />
-                      <div>
-                        <p className="font-medium">Mathematics - Grade 7A</p>
-                        <p className="text-sm text-gray-600">8:00 AM - 9:00 AM</p>
-                      </div>
+                  {dashboardStats.todaySchedule.length > 0 ? (
+                    <div className="space-y-4">
+                      {dashboardStats.todaySchedule.map((schedule: any, index: number) => (
+                        <div key={index} className="flex items-center space-x-3">
+                          <Clock className="w-4 h-4 text-red-600" />
+                          <div>
+                            <p className="font-medium">{schedule.title}</p>
+                            <p className="text-sm text-gray-600">{schedule.time}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <Clock className="w-4 h-4 text-red-600" />
-                      <div>
-                        <p className="font-medium">Science - Grade 7B</p>
-                        <p className="text-sm text-gray-600">10:00 AM - 11:00 AM</p>
-                      </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      No schedule available for today
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <Clock className="w-4 h-4 text-red-600" />
-                      <div>
-                        <p className="font-medium">Mathematics - Grade 8A</p>
-                        <p className="text-sm text-gray-600">1:00 PM - 2:00 PM</p>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -247,29 +267,23 @@ export default function TeacherPortal() {
                   <CardTitle className="text-red-800">Recent Announcements</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-3">
-                      <Bell className="w-4 h-4 text-red-600 mt-1" />
-                      <div>
-                        <p className="font-medium">Parent-Teacher Conference</p>
-                        <p className="text-sm text-gray-600">Scheduled for January 25-26, 2024</p>
-                      </div>
+                  {dashboardStats.announcements.length > 0 ? (
+                    <div className="space-y-4">
+                      {dashboardStats.announcements.map((announcement: any, index: number) => (
+                        <div key={index} className="flex items-start space-x-3">
+                          <Bell className="w-4 h-4 text-red-600 mt-1" />
+                          <div>
+                            <p className="font-medium">{announcement.title}</p>
+                            <p className="text-sm text-gray-600">{announcement.details}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-start space-x-3">
-                      <Bell className="w-4 h-4 text-red-600 mt-1" />
-                      <div>
-                        <p className="font-medium">Grade Submission Deadline</p>
-                        <p className="text-sm text-gray-600">All grades due by January 30, 2024</p>
-                      </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      No announcements available
                     </div>
-                    <div className="flex items-start space-x-3">
-                      <Bell className="w-4 h-4 text-red-600 mt-1" />
-                      <div>
-                        <p className="font-medium">Faculty Meeting</p>
-                        <p className="text-sm text-gray-600">February 2, 2024 at 3:00 PM</p>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
