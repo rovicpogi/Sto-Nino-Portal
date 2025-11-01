@@ -110,41 +110,41 @@ export default function TeacherPortal() {
       <header className="bg-white shadow-md border-b-4 border-red-800">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Image
                 src="/logo.png"
                 alt="Sto Niño de Praga Academy Logo"
                 width={60}
                 height={60}
-                className="rounded-full"
+                className="rounded-full hidden sm:block"
               />
               <div>
-                <h1 className="text-xl font-bold text-red-800">Teacher Portal</h1>
-                <p className="text-sm text-gray-600">Sto Niño de Praga Academy</p>
+                <h1 className="text-base sm:text-xl font-bold text-red-800">Teacher Portal</h1>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Sto Niño de Praga Academy</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Link href="/">
-                <Button variant="outline" className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white">
-                  <Home className="w-4 h-4 mr-2" />
-                  Home
+                <Button variant="outline" className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white text-xs sm:text-sm">
+                  <Home className="w-4 h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Home</span>
                 </Button>
               </Link>
-              <div className="text-right">
-                <p className="font-medium text-red-800">
+              <div className="text-right hidden sm:block">
+                <p className="font-medium text-red-800 text-sm">
                   {teacherData?.first_name} {teacherData?.last_name}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs text-gray-600">
                   {teacherData?.subject || teacherData?.department || "Teacher"}
                 </p>
               </div>
               <Button
                 onClick={handleLogout}
                 variant="outline"
-                className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white"
+                className="border-red-800 text-red-800 hover:bg-red-800 hover:text-white text-xs sm:text-sm"
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Log Out
+                <LogOut className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Log Out</span>
               </Button>
             </div>
           </div>
@@ -152,9 +152,9 @@ export default function TeacherPortal() {
       </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-8 gap-1">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <LayoutDashboard className="w-4 h-4 mr-2" />
               Dashboard

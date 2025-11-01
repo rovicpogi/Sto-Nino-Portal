@@ -17,12 +17,15 @@ import {
   Search,
   ChevronRight,
   Calendar,
+  Menu,
+  X,
 } from "lucide-react"
 
 export default function StudentDashboard() {
   const [activeNav, setActiveNav] = useState("dashboard")
   const [studentData, setStudentData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     // Load student data from localStorage
@@ -62,8 +65,8 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center space-x-3">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <Image
               src="/logo.png"
               alt="Sto Niño de Praga Academy Logo"
@@ -72,13 +75,13 @@ export default function StudentDashboard() {
               className="rounded-full"
             />
             <div>
-              <h1 className="text-lg font-semibold text-gray-800">Student Portal</h1>
-              <p className="text-xs text-gray-500">Sto Niño de Praga Academy</p>
+              <h1 className="text-base sm:text-lg font-semibold text-gray-800">Student Portal</h1>
+              <p className="text-xs text-gray-500 hidden sm:block">Sto Niño de Praga Academy</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="relative">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
@@ -89,7 +92,7 @@ export default function StudentDashboard() {
             <Button variant="ghost" size="sm">
               <Bell className="w-4 h-4" />
             </Button>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 hidden sm:flex">
               <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
                 {studentData?.first_name?.[0] || 'S'}{studentData?.last_name?.[0] || 'T'}
               </div>
@@ -100,13 +103,22 @@ export default function StudentDashboard() {
                 <p className="text-xs text-gray-500">Student</p>
               </div>
             </div>
+            {/* Mobile Menu Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
       </header>
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 bg-white min-h-screen border-r border-gray-200">
+        <aside className="hidden md:block w-64 bg-white min-h-screen border-r border-gray-200">
           <nav className="mt-6">
             <div className="px-4 space-y-1">
               <button
@@ -181,20 +193,140 @@ export default function StudentDashboard() {
           </nav>
         </aside>
 
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+            <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-50" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-800">Menu</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <nav className="mt-4">
+                <div className="px-4 space-y-1">
+                  <button
+                    onClick={() => {
+                      setActiveNav("dashboard")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center px-3 py-2.5 text-left text-sm rounded-md transition-colors ${
+                      activeNav === "dashboard"
+                        ? "bg-red-50 text-red-700 border-r-2 border-red-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <LayoutDashboard className="w-4 h-4 mr-3" />
+                    Dashboard
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveNav("enrollment")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center px-3 py-2.5 text-left text-sm rounded-md transition-colors ${
+                      activeNav === "enrollment"
+                        ? "bg-red-50 text-red-700 border-r-2 border-red-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 mr-3" />
+                    Enrollment
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveNav("schedule")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center px-3 py-2.5 text-left text-sm rounded-md transition-colors ${
+                      activeNav === "schedule"
+                        ? "bg-red-50 text-red-700 border-r-2 border-red-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4 mr-3" />
+                    Schedule Calendar
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveNav("grades")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center px-3 py-2.5 text-left text-sm rounded-md transition-colors ${
+                      activeNav === "grades"
+                        ? "bg-red-50 text-red-700 border-r-2 border-red-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <GraduationCap className="w-4 h-4 mr-3" />
+                    Grades & Reports
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveNav("profile")
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center px-3 py-2.5 text-left text-sm rounded-md transition-colors ${
+                      activeNav === "profile"
+                        ? "bg-red-50 text-red-700 border-r-2 border-red-600"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <User className="w-4 h-4 mr-3" />
+                    Profile
+                  </button>
+                </div>
+
+                <div className="mt-8 px-4">
+                  <Link href="/">
+                    <Button variant="ghost" className="w-full justify-start text-gray-700 hover:bg-gray-50" size="sm">
+                      <Home className="w-4 h-4 mr-3" />
+                      Back to Home
+                    </Button>
+                  </Link>
+                </div>
+
+                {/* Mobile User Info */}
+                <div className="mt-8 px-4 py-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white font-medium">
+                      {studentData?.first_name?.[0] || 'S'}{studentData?.last_name?.[0] || 'T'}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        {studentData?.first_name} {studentData?.last_name}
+                      </p>
+                      <p className="text-sm text-gray-500">Student</p>
+                    </div>
+                  </div>
+                </div>
+              </nav>
+            </div>
+          </div>
+        )}
+
         {/* Main Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6">
           {activeNav === "dashboard" && (
             <div className="space-y-6">
               {/* Welcome Section */}
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
                   Welcome back, {studentData?.first_name}!
                 </h2>
-                <p className="text-gray-600">Here's your academic overview for today.</p>
+                <p className="text-sm sm:text-base text-gray-600">Here's your academic overview for today.</p>
               </div>
 
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="bg-white border border-gray-200">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-xs font-medium text-gray-500 uppercase tracking-wide">
