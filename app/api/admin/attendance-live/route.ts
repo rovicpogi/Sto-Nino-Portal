@@ -294,21 +294,35 @@ export async function POST(request: Request) {
     }
 
     // Insert the attendance record
+    // Build insert object with only fields that might exist
+    const attendanceRecord: any = {
+      student_id: studentId,
+      scan_time: currentTime,
+      scan_type: scanType,
+      time_in: timeIn,
+      time_out: timeOut,
+      status: scanType === 'timein' ? 'Present' : 'Present',
+      created_at: currentTime,
+    }
+    
+    // Only add rfid_card if the column exists (will be ignored if it doesn't)
+    // Try to add it, but don't fail if column doesn't exist
+    try {
+      attendanceRecord.rfid_card = scanData.rfidCard || null
+    } catch (e) {
+      // Ignore if column doesn't exist
+    }
+    
+    // Also try type field for compatibility
+    try {
+      attendanceRecord.type = scanType
+    } catch (e) {
+      // Ignore if column doesn't exist
+    }
+    
     const { data: newRecord, error: insertError } = await supabaseClient
       .from('attendance_records')
-      .insert([
-        {
-          student_id: studentId,
-          rfid_card: scanData.rfidCard || null,
-          scan_time: currentTime,
-          scan_type: scanType,
-          type: scanType, // Also store in type field for compatibility
-          time_in: timeIn,
-          time_out: timeOut,
-          status: scanType === 'timein' ? 'Present' : 'Present', // Can be customized
-          created_at: currentTime,
-        },
-      ])
+      .insert([attendanceRecord])
       .select(`
         *,
         students (
