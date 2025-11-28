@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -21,18 +21,499 @@ import {
   FileText,
   Calendar,
   DollarSign,
+  Lock,
+  Mail,
+  RefreshCcw,
+  AlertCircle,
+  Wifi,
+  Activity,
+  Filter,
 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+interface Admin {
+  id: number
+  email: string
+  name?: string
+  first_name?: string
+  last_name?: string
+  [key: string]: any
+}
 
+interface Student {
+  id: number
+  name: string
+  student_id: string
+  grade_level: string
+  section: string
+  email?: string
+  phone?: string
+  status?: string
+  created_at?: string
+}
 
+interface AttendanceData {
+  summary: {
+    totalStudents: number
+    presentStudents: number
+    totalTeachers: number
+    presentTeachers: number
+    lastSync: string
+  }
+  rfid: {
+    status: string
+    activeCards: number
+    offlineReaders: number
+    pendingActivations: number
+  }
+  recentAlerts: {
+    id: string
+    type: "info" | "warning" | "error"
+    message: string
+    timestamp: string
+  }[]
+}
+
+interface AdminSettings {
+  schoolName: string
+  academicYear: string
+  automaticBackup: boolean
+  rfidIntegration: boolean
+  emailNotifications: boolean
+  studentPortal: boolean
+  teacherPortal: boolean
+}
+
+const DEFAULT_SETTINGS: AdminSettings = {
+  schoolName: "Sto Niño de Praga Academy",
+  academicYear: "2024-2025",
+  automaticBackup: true,
+  rfidIntegration: true,
+  emailNotifications: true,
+  studentPortal: true,
+  teacherPortal: true,
+}
+
+const gradeOptions = [
+  "All Grades",
+  "Grade 1",
+  "Grade 2",
+  "Grade 3",
+  "Grade 4",
+  "Grade 5",
+  "Grade 6",
+  "Grade 7",
+  "Grade 8",
+  "Grade 9",
+  "Grade 10",
+  "Grade 11",
+  "Grade 12",
+]
+
+const studentStatusOptions = ["Enrolled", "Pending", "Alumni", "Inactive"]
 
 export default function AdminPortal() {
+  const [admin, setAdmin] = useState<Admin | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [newStudent, setNewStudent] = useState({
+    name: "",
+    studentId: "",
+    gradeLevel: "",
+    section: "",
+    email: "",
+    phone: "",
+  })
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    totalTeachers: 0,
+    attendanceRate: 0,
+  })
+  const [students, setStudents] = useState<Student[]>([])
+  const [loadingStats, setLoadingStats] = useState(false)
+  const [loadingStudents, setLoadingStudents] = useState(false)
+  const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null)
+  const [attendanceLoading, setAttendanceLoading] = useState(false)
+  const [attendanceError, setAttendanceError] = useState<string | null>(null)
+  const [studentFilters, setStudentFilters] = useState({
+    search: "",
+    grade: "All Grades",
+    status: "all",
+  })
+  const [studentFormError, setStudentFormError] = useState<string | null>(null)
+  const [settingsForm, setSettingsForm] = useState<AdminSettings>(DEFAULT_SETTINGS)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null)
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesSearch =
+        studentFilters.search.trim().length === 0 ||
+        `${student.name} ${student.student_id}`.toLowerCase().includes(studentFilters.search.toLowerCase())
+      const matchesGrade =
+        studentFilters.grade === "All Grades" ||
+        student.grade_level?.toLowerCase() === studentFilters.grade.toLowerCase()
+      const matchesStatus =
+        studentFilters.status === "all" ||
+        (student.status || "Enrolled").toLowerCase() === studentFilters.status.toLowerCase()
+      return matchesSearch && matchesGrade && matchesStatus
+    })
+  }, [students, studentFilters])
+
+  // Fetch stats from API
+  const fetchStats = async () => {
+    setLoadingStats(true)
+    try {
+      const response = await fetch("/api/admin/stats")
+      const result = await response.json()
+      if (result.success && result.data) {
+        setStats(result.data)
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+    } finally {
+      setLoadingStats(false)
+    }
+  }
+
+  // Fetch students from API
+  const fetchStudents = async () => {
+    setLoadingStudents(true)
+    try {
+      const response = await fetch("/api/admin/students")
+      const result = await response.json()
+      if (result.success && result.students) {
+        setStudents(result.students)
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error)
+    } finally {
+      setLoadingStudents(false)
+    }
+  }
+
+  const fetchAttendance = async () => {
+    setAttendanceLoading(true)
+    setAttendanceError(null)
+    try {
+      const response = await fetch("/api/admin/attendance")
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to load attendance data.")
+      }
+      setAttendanceData(result.data)
+    } catch (error: any) {
+      console.error("Error fetching attendance:", error)
+      setAttendanceError(error?.message || "Unable to load attendance data.")
+    } finally {
+      setAttendanceLoading(false)
+    }
+  }
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true)
+    setSettingsFeedback(null)
+    try {
+      const response = await fetch("/api/admin/settings")
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to load settings.")
+      }
+      setSettingsForm(result.settings)
+    } catch (error: any) {
+      console.error("Error fetching settings:", error)
+      setSettingsFeedback(error?.message || "Unable to load settings.")
+    } finally {
+      setSettingsLoading(false)
+    }
+  }
+
+  const saveSettings = async () => {
+    setSettingsSaving(true)
+    setSettingsFeedback(null)
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsForm),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to save settings.")
+      }
+      setSettingsForm(result.settings)
+      setSettingsFeedback("Settings saved successfully.")
+    } catch (error: any) {
+      console.error("Error saving settings:", error)
+      setSettingsFeedback(error?.message || "Unable to save settings.")
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
+  // Check if admin is logged in on component mount
+  useEffect(() => {
+    const storedAdmin = localStorage.getItem("admin")
+    if (storedAdmin) {
+      try {
+        const adminData = JSON.parse(storedAdmin)
+        setAdmin(adminData)
+      } catch (error) {
+        console.error("Error parsing stored admin data:", error)
+        localStorage.removeItem("admin")
+      }
+    }
+    setIsLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (admin) {
+      fetchStats()
+      fetchStudents()
+      fetchAttendance()
+      fetchSettings()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin])
+
+  // Refresh attendance data when tab opened
+  useEffect(() => {
+    if (admin && activeTab === "attendance" && !attendanceData && !attendanceLoading) {
+      fetchAttendance()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
+  // Fetch students when tab changes to students
+  useEffect(() => {
+    if (admin && activeTab === "students" && !loadingStudents) {
+      fetchStudents()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      })
+
+      // Check if response is ok
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Network error occurred' }))
+        setLoginError(errorData.error || `Server error (${response.status}). Please try again.`)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.admin) {
+        setAdmin(data.admin)
+        localStorage.setItem("admin", JSON.stringify(data.admin))
+        setLoginEmail("")
+        setLoginPassword("")
+        setLoginError(null)
+      } else {
+        setLoginError(data.error || "Login failed. Please check your credentials.")
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      const errorMessage = error?.message || String(error) || ''
+      if (errorMessage && (errorMessage.includes('fetch') || errorMessage.includes('network'))) {
+        setLoginError("Network error. Please check your internet connection and try again.")
+      } else if (errorMessage && errorMessage.includes('Failed to fetch')) {
+        setLoginError("Cannot connect to the server. Please make sure the server is running.")
+      } else {
+        setLoginError(`An error occurred: ${errorMessage || 'Please try again.'}`)
+      }
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
 
   const handleLogout = () => {
     if (confirm("Are you sure you want to log out?")) {
+      localStorage.removeItem("admin")
+      setAdmin(null)
       window.location.href = "/"
     }
+  }
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStudentFormError(null)
+
+    if (!newStudent.name.trim() || !newStudent.studentId.trim() || !newStudent.section.trim()) {
+      setStudentFormError("Name, Student ID, and Section are required.")
+      return
+    }
+
+    if (!newStudent.gradeLevel) {
+      setStudentFormError("Please select a grade level.")
+      return
+    }
+    
+    try {
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newStudent),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("Student added successfully!")
+        setShowAddStudent(false)
+        setNewStudent({
+          name: "",
+          studentId: "",
+          gradeLevel: "",
+          section: "",
+          email: "",
+          phone: "",
+        })
+        setStudentFormError(null)
+        // Refresh the students list
+        fetchStudents()
+        fetchStats()
+      } else {
+        alert(data.error || "Failed to add student. Please try again.")
+      }
+    } catch (error) {
+      console.error("Add student error:", error)
+      alert("Error adding student. Please try again.")
+    }
+  }
+
+  const handleStudentStatusChange = (studentId: number, statusValue: string) => {
+    const formattedStatus = statusValue.charAt(0).toUpperCase() + statusValue.slice(1)
+    setStudents((prev) =>
+      prev.map((student) => (student.id === studentId ? { ...student, status: formattedStatus } : student)),
+    )
+  }
+
+  const handleFilterChange = (field: "search" | "grade" | "status", value: string) => {
+    setStudentFilters((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSettingsInputChange = (field: keyof AdminSettings, value: string) => {
+    setSettingsForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleToggleSetting = (field: keyof AdminSettings) => {
+    setSettingsForm((prev) => ({ ...prev, [field]: !prev[field] }))
+  }
+
+  const getRate = (present: number, total: number) => {
+    if (!total) return "0.0"
+    return ((present / total) * 100).toFixed(1)
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-bold text-red-800">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login form if not authenticated
+  if (!admin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md border-gray-200">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Image
+                src="/logo.png"
+                alt="Sto Niño de Praga Academy Logo"
+                width={80}
+                height={80}
+                className="rounded-full"
+              />
+            </div>
+            <CardTitle className="text-2xl font-bold text-gray-800">Admin Login</CardTitle>
+            <CardDescription>Sto Niño de Praga Academy</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-800">
+                  <Mail className="w-4 h-4 inline mr-2" />
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="border-gray-300"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-800">
+                  <Lock className="w-4 h-4 inline mr-2" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="border-gray-300"
+                />
+              </div>
+              {loginError && (
+                <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+                  {loginError}
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full bg-red-800 hover:bg-red-700"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? "Logging in..." : "Login"}
+              </Button>
+              <div className="text-center">
+                <Link href="/" className="text-sm text-gray-600 hover:text-red-800">
+                  <Home className="w-4 h-4 inline mr-1" />
+                  Back to Home
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -65,7 +546,9 @@ export default function AdminPortal() {
                 </Button>
               </Link>
               <div className="text-right">
-                <p className="font-medium text-red-800">Admin User</p>
+                <p className="font-medium text-red-800">
+                  {admin.name || admin.first_name || admin.email || "Admin User"}
+                </p>
                 <p className="text-sm text-gray-600">System Administrator</p>
               </div>
               <Button
@@ -115,7 +598,9 @@ export default function AdminPortal() {
                   <Users className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">1,247</div>
+                  <div className="text-2xl font-bold text-red-800">
+                    {loadingStats ? "..." : stats.totalStudents.toLocaleString()}
+                  </div>
                   <p className="text-xs text-gray-600">All grade levels</p>
                 </CardContent>
               </Card>
@@ -126,7 +611,9 @@ export default function AdminPortal() {
                   <Shield className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-800">65</div>
+                  <div className="text-2xl font-bold text-red-800">
+                    {loadingStats ? "..." : stats.totalTeachers.toLocaleString()}
+                  </div>
                   <p className="text-xs text-gray-600">Active teachers</p>
                 </CardContent>
               </Card>
@@ -218,46 +705,150 @@ export default function AdminPortal() {
           <TabsContent value="attendance" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-red-800">Attendance and RFID Management</CardTitle>
-                <CardDescription>Monitor attendance records and RFID system</CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-red-800">Attendance and RFID Management</CardTitle>
+                    <CardDescription>Monitor attendance records and RFID system</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchAttendance}
+                    disabled={attendanceLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCcw className={`w-4 h-4 ${attendanceLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
+                {attendanceError && (
+                  <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-md p-3 mt-3">
+                    <AlertCircle className="w-4 h-4 mt-0.5" />
+                    <span>{attendanceError}</span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-medium mb-4">Today's Attendance</h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>Students Present</span>
-                        <span className="font-medium">1,178 / 1,247</span>
+                {attendanceLoading ? (
+                  <div className="text-center py-8 text-gray-500">Loading attendance data...</div>
+                ) : attendanceData ? (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium">Today's Attendance</h4>
+                          <Badge variant="outline" className="text-green-700 border-green-200">
+                            Updated {attendanceData.summary.lastSync}
+                          </Badge>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between">
+                            <span>Students Present</span>
+                            <span className="font-semibold">
+                              {attendanceData.summary.presentStudents.toLocaleString()} /{" "}
+                              {attendanceData.summary.totalStudents.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Teachers Present</span>
+                            <span className="font-semibold">
+                              {attendanceData.summary.presentTeachers.toLocaleString()} /{" "}
+                              {attendanceData.summary.totalTeachers.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-green-700">
+                            <span>Overall Rate</span>
+                            <span className="font-semibold">
+                              {getRate(
+                                attendanceData.summary.presentStudents + attendanceData.summary.presentTeachers,
+                                attendanceData.summary.totalStudents + attendanceData.summary.totalTeachers,
+                              )}
+                              %
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Teachers Present</span>
-                        <span className="font-medium">62 / 65</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Overall Rate</span>
-                        <span className="font-medium text-green-600">94.5%</span>
+                      <div className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium flex items-center gap-2">
+                            <Wifi className="w-4 h-4 text-red-700" />
+                            RFID System Status
+                          </h4>
+                          <Badge
+                            className={`${
+                              attendanceData.rfid.status === "online"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {attendanceData.rfid.status === "online" ? "Online" : "Degraded"}
+                          </Badge>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between">
+                            <span>Active Cards</span>
+                            <span className="font-semibold">{attendanceData.rfid.activeCards.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Pending Activations</span>
+                            <span className="font-semibold">{attendanceData.rfid.pendingActivations}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Offline Readers</span>
+                            <span
+                              className={`font-semibold ${
+                                attendanceData.rfid.offlineReaders > 0 ? "text-red-600" : "text-green-700"
+                              }`}
+                            >
+                              {attendanceData.rfid.offlineReaders}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <h4 className="font-medium mb-4">RFID System Status</h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>System Status</span>
-                        <Badge className="bg-green-100 text-green-800">Online</Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Active Cards</span>
-                        <span className="font-medium">1,312</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Last Sync</span>
-                        <span className="font-medium">2 minutes ago</span>
-                      </div>
+                    <div>
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-red-700" />
+                        System Alerts
+                      </h4>
+                      {attendanceData.recentAlerts.length === 0 ? (
+                        <p className="text-sm text-gray-500">No alerts today.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {attendanceData.recentAlerts.map((alert) => (
+                            <div
+                              key={alert.id}
+                              className="flex items-center justify-between border border-gray-100 rounded-lg p-3 text-sm"
+                            >
+                              <div className="flex items-center gap-2">
+                                <AlertCircle
+                                  className={`w-4 h-4 ${
+                                    alert.type === "warning"
+                                      ? "text-yellow-600"
+                                      : alert.type === "error"
+                                      ? "text-red-600"
+                                      : "text-blue-600"
+                                  }`}
+                                />
+                                <div>
+                                  <p className="font-medium text-gray-900">{alert.message}</p>
+                                  <p className="text-xs text-gray-500">Logged at {alert.timestamp}</p>
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="border-gray-200">
+                                RFID
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    Attendance data unavailable. Please refresh.
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -273,7 +864,142 @@ export default function AdminPortal() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium">Student Records</h4>
-                    <Button className="bg-red-800 hover:bg-red-700">Add New Student</Button>
+                    <Dialog open={showAddStudent} onOpenChange={setShowAddStudent}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-red-800 hover:bg-red-700">Add New Student</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle className="text-red-800">Add New Student</DialogTitle>
+                          <DialogDescription>Enter the student's information to add them to the system</DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleAddStudent} className="space-y-4">
+                          <div>
+                            <Label htmlFor="studentName">Full Name *</Label>
+                            <Input
+                              id="studentName"
+                              value={newStudent.name}
+                              onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="studentId">Student ID *</Label>
+                            <Input
+                              id="studentId"
+                              value={newStudent.studentId}
+                              onChange={(e) => setNewStudent({ ...newStudent, studentId: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="gradeLevel">Grade Level *</Label>
+                              <Select
+                                value={newStudent.gradeLevel}
+                                onValueChange={(value) => setNewStudent({ ...newStudent, gradeLevel: value })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select grade" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Grade 1">Grade 1</SelectItem>
+                                  <SelectItem value="Grade 2">Grade 2</SelectItem>
+                                  <SelectItem value="Grade 3">Grade 3</SelectItem>
+                                  <SelectItem value="Grade 4">Grade 4</SelectItem>
+                                  <SelectItem value="Grade 5">Grade 5</SelectItem>
+                                  <SelectItem value="Grade 6">Grade 6</SelectItem>
+                                  <SelectItem value="Grade 7">Grade 7</SelectItem>
+                                  <SelectItem value="Grade 8">Grade 8</SelectItem>
+                                  <SelectItem value="Grade 9">Grade 9</SelectItem>
+                                  <SelectItem value="Grade 10">Grade 10</SelectItem>
+                                  <SelectItem value="Grade 11">Grade 11</SelectItem>
+                                  <SelectItem value="Grade 12">Grade 12</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label htmlFor="section">Section *</Label>
+                              <Input
+                                id="section"
+                                value={newStudent.section}
+                                onChange={(e) => setNewStudent({ ...newStudent, section: e.target.value })}
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={newStudent.email}
+                              onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="phone">Phone Number</Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              value={newStudent.phone}
+                              onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            {studentFormError && (
+                              <p className="text-sm text-red-600 flex-1">{studentFormError}</p>
+                            )}
+                            <Button type="button" variant="outline" onClick={() => setShowAddStudent(false)}>
+                              Cancel
+                            </Button>
+                            <Button type="submit" className="bg-red-800 hover:bg-red-700">
+                              Add Student
+                            </Button>
+                          </div>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Filter className="w-4 h-4" />
+                      <span>Filter records</span>
+                    </div>
+                    <Input
+                      placeholder="Search by name or ID"
+                      value={studentFilters.search}
+                      onChange={(e) => handleFilterChange("search", e.target.value)}
+                      className="w-full md:w-1/3"
+                    />
+                    <Select value={studentFilters.grade} onValueChange={(value) => handleFilterChange("grade", value)}>
+                      <SelectTrigger className="w-full md:w-48">
+                        <SelectValue placeholder="Grade level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gradeOptions.map((grade) => (
+                          <SelectItem key={grade} value={grade}>
+                            {grade}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={studentFilters.status}
+                      onValueChange={(value) => handleFilterChange("status", value)}
+                    >
+                      <SelectTrigger className="w-full md:w-48">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        {studentStatusOptions.map((status) => (
+                          <SelectItem key={status} value={status.toLowerCase()}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Table>
                     <TableHeader>
@@ -286,33 +1012,45 @@ export default function AdminPortal() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell>2024-001234</TableCell>
-                        <TableCell>Miguel Torres</TableCell>
-                        <TableCell>Grade 10</TableCell>
-                        <TableCell>St. Joseph</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>2024-001235</TableCell>
-                        <TableCell>Ana Garcia</TableCell>
-                        <TableCell>Grade 9</TableCell>
-                        <TableCell>St. Mary</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>2024-001236</TableCell>
-                        <TableCell>Carlos Mendoza</TableCell>
-                        <TableCell>Grade 8</TableCell>
-                        <TableCell>St. Peter</TableCell>
-                        <TableCell>
-                          <Badge className="bg-green-100 text-green-800">Enrolled</Badge>
-                        </TableCell>
-                      </TableRow>
+                      {loadingStudents ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-500">
+                            Loading students...
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredStudents.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-gray-500">
+                            No students match the current filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredStudents.map((student) => (
+                          <TableRow key={student.id}>
+                            <TableCell>{student.student_id || "N/A"}</TableCell>
+                            <TableCell>{student.name || "N/A"}</TableCell>
+                            <TableCell>{student.grade_level || "N/A"}</TableCell>
+                            <TableCell>{student.section || "N/A"}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={(student.status || "Enrolled").toLowerCase()}
+                                onValueChange={(value) => handleStudentStatusChange(student.id, value)}
+                              >
+                                <SelectTrigger className="w-32 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {studentStatusOptions.map((status) => (
+                                    <SelectItem key={status} value={status.toLowerCase()}>
+                                      {status}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -381,49 +1119,73 @@ export default function AdminPortal() {
                 <CardDescription>Configure system preferences and administrative settings</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="font-medium mb-4">General Settings</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="schoolName">School Name</Label>
-                        <Input id="schoolName" defaultValue="Sto Niño de Praga Academy" />
-                      </div>
-                      <div>
-                        <Label htmlFor="academicYear">Academic Year</Label>
-                        <Input id="academicYear" defaultValue="2024-2025" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-4">System Configuration</h4>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span>Automatic Backup</span>
-                        <Badge className="bg-green-100 text-green-800">Enabled</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>RFID Integration</span>
-                        <Badge className="bg-green-100 text-green-800">Active</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Email Notifications</span>
-                        <Badge className="bg-green-100 text-green-800">Enabled</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Student Portal Access</span>
-                        <Badge className="bg-green-100 text-green-800">Active</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Teacher Portal Access</span>
-                        <Badge className="bg-green-100 text-green-800">Active</Badge>
+                {settingsLoading ? (
+                  <div className="text-center py-6 text-gray-500">Loading settings...</div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="font-medium mb-4">General Settings</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="schoolName">School Name</Label>
+                          <Input
+                            id="schoolName"
+                            value={settingsForm.schoolName}
+                            onChange={(e) => handleSettingsInputChange("schoolName", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="academicYear">Academic Year</Label>
+                          <Input
+                            id="academicYear"
+                            value={settingsForm.academicYear}
+                            onChange={(e) => handleSettingsInputChange("academicYear", e.target.value)}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <Button className="bg-red-800 hover:bg-red-700">Save Settings</Button>
-                </div>
+                    <div>
+                      <h4 className="font-medium mb-4">System Configuration</h4>
+                      <div className="space-y-4">
+                        {[
+                          { label: "Automatic Backup", field: "automaticBackup", description: "Daily off-site backups" },
+                          { label: "RFID Integration", field: "rfidIntegration", description: "Sync attendance readers" },
+                          { label: "Email Notifications", field: "emailNotifications", description: "Send alerts to guardians" },
+                          { label: "Student Portal Access", field: "studentPortal", description: "Allow student logins" },
+                          { label: "Teacher Portal Access", field: "teacherPortal", description: "Enable teacher dashboard" },
+                        ].map((item) => (
+                          <label key={item.field} className="flex items-start justify-between gap-4">
+                            <div>
+                              <span className="block font-medium text-sm">{item.label}</span>
+                              <span className="text-xs text-gray-500">{item.description}</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="h-5 w-5 rounded border-gray-300 text-red-700 focus:ring-red-500"
+                              checked={settingsForm[item.field as keyof AdminSettings] as boolean}
+                              onChange={() => handleToggleSetting(item.field as keyof AdminSettings)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {settingsFeedback && (
+                      <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md p-3">
+                        {settingsFeedback}
+                      </div>
+                    )}
+
+                    <Button
+                      className="bg-red-800 hover:bg-red-700"
+                      onClick={saveSettings}
+                      disabled={settingsSaving}
+                    >
+                      {settingsSaving ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

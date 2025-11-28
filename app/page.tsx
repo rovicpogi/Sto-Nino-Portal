@@ -19,11 +19,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { GraduationCap, Users, BookOpen, Award, Phone, Mail, MapPin } from "lucide-react"
+import { GraduationCap, Users, BookOpen, Award, Phone, Mail, MapPin, Menu, X } from "lucide-react"
 
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [loginType, setLoginType] = useState("student")
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState("")
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [admissionForm, setAdmissionForm] = useState({
     studentName: "",
     parentName: "",
@@ -40,37 +45,105 @@ export default function HomePage() {
     alert("Thank you for your interest! We will contact you soon.")
   }
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (loginType === "teacher") {
-      window.location.href = "/teacher"
-    } else if (loginType === "student") {
-      window.location.href = "/student"
-    } else if (loginType === "admin") {
-      window.location.href = "/admin"
-    } else if (loginType === "guardian") {
-      window.location.href = "/guardian"
+    setLoginError("")
+    setIsLoggingIn(true)
+
+    try {
+      // Determine the API endpoint based on login type
+      let apiEndpoint = ""
+      if (loginType === "teacher") {
+        apiEndpoint = "/api/teacher/login"
+      } else if (loginType === "student") {
+        apiEndpoint = "/api/student/login"
+      } else if (loginType === "admin") {
+        apiEndpoint = "/api/admin/login"
+      } else if (loginType === "guardian") {
+        apiEndpoint = "/api/student/login"
+      }
+
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      // Handle both 'success' and 'ok' response formats
+      if (data.success || data.ok) {
+        // Store user data in localStorage if available
+        if (data.teacher) {
+          localStorage.setItem("teacher", JSON.stringify(data.teacher))
+        } else if (data.student) {
+          localStorage.setItem("student", JSON.stringify(data.student))
+        } else if (data.user) {
+          // Handle new API format (data.user + data.userType)
+          if (loginType === "teacher" || data.userType === "teacher") {
+            localStorage.setItem("teacher", JSON.stringify(data.user))
+          } else if (loginType === "student" || data.userType === "student") {
+            localStorage.setItem("student", JSON.stringify(data.user))
+          } else if (loginType === "admin" || data.userType === "admin") {
+            localStorage.setItem("admin", JSON.stringify(data.user))
+          }
+        }
+        
+        // Keep loading state during redirect
+        setLoginOpen(false)
+        
+        // Redirect based on user type
+        if (loginType === "teacher") {
+          window.location.href = "/teacher"
+        } else if (loginType === "student") {
+          window.location.href = "/student"
+        } else if (loginType === "admin") {
+          window.location.href = "/admin"
+        } else if (loginType === "guardian") {
+          window.location.href = "/guardian"
+        }
+      } else {
+        setLoginError(data.error || "Login failed")
+        setIsLoggingIn(false)
+      }
+    } catch (error) {
+      setLoginError("Network error. Please try again.")
+      setIsLoggingIn(false)
     }
-    setLoginOpen(false)
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
+      {/* Loading Overlay */}
+      {isLoggingIn && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-800 mb-4"></div>
+            <p className="text-gray-700 font-medium">Logging in...</p>
+            <p className="text-gray-500 text-sm mt-2">Please wait</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-md border-b-4 border-red-800">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <Image
                 src="/logo.png"
                 alt="Sto Niño de Praga Academy Logo"
                 width={80}
                 height={80}
-                className="rounded-full"
+                className="rounded-full hidden sm:block"
               />
               <div>
-                <h1 className="text-2xl font-bold text-red-800">Sto Niño de Praga Academy</h1>
-                <p className="text-sm text-gray-600">Excellence in Education Since 1998</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-red-800">Sto Niño de Praga Academy</h1>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Excellence in Education Since 1998</p>
               </div>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
@@ -111,18 +184,44 @@ export default function HomePage() {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="username">Username</Label>
-                      <Input id="username" type="text" required />
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
+                        disabled={isLoggingIn}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="password">Password</Label>
-                      <Input id="password" type="password" required />
+                      <Input
+                        id="password"
+                        type="password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                        disabled={isLoggingIn}
+                      />
                     </div>
+                    {loginError && (
+                      <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{loginError}</div>
+                    )}
                     <div className="flex justify-between">
-                      <Button type="submit" className="bg-red-800 hover:bg-red-700">
-                        Login
+                      <Button
+                        type="submit"
+                        className="bg-red-800 hover:bg-red-700"
+                        disabled={isLoggingIn}
+                      >
+                        {isLoggingIn ? "Logging in..." : "Login"}
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => setLoginOpen(false)}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setLoginOpen(false)}
+                        disabled={isLoggingIn}
+                      >
                         Cancel
                       </Button>
                     </div>
@@ -130,15 +229,70 @@ export default function HomePage() {
                 </DialogContent>
               </Dialog>
             </nav>
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="text-red-800"
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </Button>
+            </div>
           </div>
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-4 pb-4 border-t border-gray-200">
+              <nav className="flex flex-col space-y-3 pt-4">
+                <a 
+                  href="#home" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Home
+                </a>
+                <a 
+                  href="#about" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  About
+                </a>
+                <a 
+                  href="#admissions" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Admissions
+                </a>
+                <a 
+                  href="#contact" 
+                  className="text-red-800 hover:text-red-600 font-medium py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Contact
+                </a>
+                <Button
+                  className="bg-red-800 hover:bg-red-700 text-white w-full mt-2"
+                  onClick={() => {
+                    setMobileMenuOpen(false)
+                    setLoginOpen(true)
+                  }}
+                >
+                  Login
+                </Button>
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Hero Section */}
-      <section id="home" className="py-20 bg-gradient-to-r from-red-800 to-red-900 text-white">
+      <section id="home" className="py-12 sm:py-20 bg-gradient-to-r from-red-800 to-red-900 text-white">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-5xl font-bold mb-6">Welcome to Excellence</h2>
-          <p className="text-xl mb-8 max-w-3xl mx-auto">
+          <h2 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6">Welcome to Excellence</h2>
+          <p className="text-base sm:text-xl mb-6 sm:mb-8 max-w-3xl mx-auto">
             Nurturing young minds with quality education, strong values, and Christian principles since 1998. Join our
             community of learners and achievers.
           </p>
@@ -164,11 +318,11 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section id="about" className="py-16 bg-amber-50">
+      <section id="about" className="py-12 sm:py-16 bg-amber-50">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h3 className="text-3xl font-bold text-red-800 mb-4">Why Choose Our Academy?</h3>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+          <div className="text-center mb-8 sm:mb-12">
+            <h3 className="text-2xl sm:text-3xl font-bold text-red-800 mb-4">Why Choose Our Academy?</h3>
+            <p className="text-gray-600 max-w-2xl mx-auto text-sm sm:text-base">
               We provide a comprehensive education that develops not just academic excellence, but also character,
               leadership, and spiritual growth.
             </p>
