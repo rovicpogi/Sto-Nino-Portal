@@ -263,9 +263,9 @@ export async function POST(request: Request) {
       
       console.log(`Found student: ${matchedStudent.first_name || matchedStudent.firstName || 'Unknown'} ${matchedStudent.last_name || matchedStudent.lastName || ''}`)
       
-      // Get the UUID id (primary key) for the foreign key relationship
-      // attendance_records.student_id should reference students.id (UUID), not student_id (TEXT)
-      studentId = matchedStudent.id || matchedStudent.student_id || matchedStudent.student_number || matchedStudent.studentId
+      // Use student_number or student_id (TEXT) - NOT the UUID id
+      // attendance_records.student_id is TEXT type, so we store TEXT values
+      studentId = matchedStudent.student_number || matchedStudent.student_id || matchedStudent.studentId || matchedStudent.id?.toString()
     }
 
     // Check if student has already scanned in today
