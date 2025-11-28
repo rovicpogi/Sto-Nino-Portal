@@ -165,26 +165,81 @@ export async function POST(request: Request) {
     // Find student by RFID card or student ID
     let studentId = scanData.studentId
     if (!studentId && scanData.rfidCard) {
-      // Try to find student by rfid_card, rfidCard, or rfid_tag fields
-      // Also try both uppercase and lowercase versions
-      const rfidUpper = scanData.rfidCard.toUpperCase()
-      const rfidLower = scanData.rfidCard.toLowerCase()
+      // Normalize RFID card - remove spaces, convert to uppercase, remove leading zeros
+      let rfidNormalized = scanData.rfidCard.toString().trim().toUpperCase().replace(/\s+/g, '')
+      // Also create version without leading zeros for matching
+      const rfidNoLeadingZeros = rfidNormalized.replace(/^0+/, '')
       
-      const { data: students, error: studentError } = await supabaseClient
+      console.log(`Searching for student with RFID: ${rfidNormalized} (also trying: ${rfidNoLeadingZeros})`)
+      
+      // Fetch all students and filter in memory to avoid column errors
+      const { data: allStudents, error: fetchError } = await supabaseClient
         .from('students')
-        .select('student_id, student_number, rfid_card, rfidCard, rfid_tag')
-        .or(`rfid_card.eq.${rfidUpper},rfid_card.eq.${rfidLower},rfidCard.eq.${rfidUpper},rfidCard.eq.${rfidLower},rfid_tag.eq.${rfidUpper},rfid_tag.eq.${rfidLower}`)
-        .limit(1)
+        .select('*')
+        .limit(1000)
 
-      if (studentError || !students || students.length === 0) {
+      if (fetchError) {
+        console.error('Error fetching students:', fetchError)
         return NextResponse.json(
-          { success: false, error: `Student not found for RFID card: ${scanData.rfidCard}` },
-          { status: 404 }
+          { 
+            success: false, 
+            error: `Database error: ${fetchError.message}`,
+            searchedRfid: rfidNormalized
+          },
+          { 
+            status: 500,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          }
+        )
+      }
+
+      // Filter students in memory by RFID (check all possible column names)
+      const students = (allStudents || []).filter((student: any) => {
+        const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()
+        const rfid2 = (student.rfidCard || '').toString().trim().toUpperCase()
+        const rfid3 = (student.rfid_tag || '').toString().trim().toUpperCase()
+        const rfid4 = (student.rfidTag || '').toString().trim().toUpperCase()
+        
+        return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
+               rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
+               rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
+               rfid4 === rfidNormalized || rfid4 === rfidNoLeadingZeros ||
+               rfid1.includes(rfidNormalized) || rfid2.includes(rfidNormalized) ||
+               rfid3.includes(rfidNormalized) || rfid4.includes(rfidNormalized)
+      })
+
+      if (!students || students.length === 0) {
+        console.log(`No student found with RFID: ${rfidNormalized}`)
+        
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `Student not found for RFID: ${rfidNormalized}. Please assign this RFID card to a student in the admin panel.`,
+            searchedRfid: rfidNormalized,
+            message: `RFID ${rfidNormalized} not assigned to any student`
+          },
+          { 
+            status: 404,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          }
         )
       }
       
+      // Use first match
+      const matchedStudent = students[0]
+      
+      console.log(`Found student: ${matchedStudent.first_name || matchedStudent.firstName || 'Unknown'} ${matchedStudent.last_name || matchedStudent.lastName || ''}`)
+      
       // Get student_id or student_number
-      studentId = students[0].student_id || students[0].student_number
+      studentId = matchedStudent.student_id || matchedStudent.student_number || matchedStudent.id || matchedStudent.studentId
     }
 
     // Check if student has already scanned in today
