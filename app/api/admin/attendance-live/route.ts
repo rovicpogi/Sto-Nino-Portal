@@ -72,22 +72,56 @@ export async function GET(request: Request) {
     let error: any = null
     
     try {
-      let query = supabaseClient
+      console.log('Attempting to fetch attendance records...')
+      console.log('Limit:', limit)
+      console.log('Since:', since)
+      
+      // Try a simple query first - just get count to test connection
+      const { count, error: countError } = await supabaseClient
         .from('attendance_records')
-        .select('*')
-        .order('scan_time', { ascending: false })
-        .limit(limit)
+        .select('*', { count: 'exact', head: true })
+      
+      if (countError) {
+        console.error('Count query error:', countError)
+        console.error('Error code:', countError.code)
+        console.error('Error message:', countError.message)
+        console.error('Error details:', countError.details)
+        console.error('Error hint:', countError.hint)
+        error = countError
+      } else {
+        console.log('Count query successful, count:', count)
+        
+        // Now try the actual query
+        let query = supabaseClient
+          .from('attendance_records')
+          .select('id, scan_time, scan_type, student_id, rfid_card, status') // Select only needed columns
+          .order('scan_time', { ascending: false })
+          .limit(limit)
 
-      // If 'since' parameter is provided, filter records after that time
-      if (since) {
-        query = query.gt('scan_time', since)
+        // If 'since' parameter is provided, filter records after that time
+        if (since) {
+          query = query.gt('scan_time', since)
+        }
+
+        const result = await query
+        data = result.data || []
+        error = result.error
+        
+        if (error) {
+          console.error('Select query error:', error)
+          console.error('Error code:', error.code)
+          console.error('Error message:', error.message)
+          console.error('Error details:', error.details)
+          console.error('Error hint:', error.hint)
+        } else {
+          console.log('Select query successful, records:', data.length)
+        }
       }
-
-      const result = await query
-      data = result.data || []
-      error = result.error
     } catch (queryError: any) {
-      console.error('Query execution error:', queryError)
+      console.error('Query execution exception:', queryError)
+      console.error('Exception name:', queryError.name)
+      console.error('Exception message:', queryError.message)
+      console.error('Exception stack:', queryError.stack)
       error = queryError
     }
 
