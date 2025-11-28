@@ -41,6 +41,24 @@ export default function RfidDisplayPage() {
         : `/api/admin/attendance-live?limit=50`
       
       const response = await fetch(url)
+      
+      // Check if response is OK
+      if (!response.ok) {
+        console.error('API response not OK:', response.status, response.statusText)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        return
+      }
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Response is not JSON:', contentType)
+        const text = await response.text()
+        console.error('Response text:', text.substring(0, 200))
+        return
+      }
+      
       const result = await response.json()
       
       if (result.success && result.records) {
