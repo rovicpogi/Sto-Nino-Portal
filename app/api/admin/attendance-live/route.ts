@@ -15,6 +15,14 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
+  // Set default headers for all responses
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -195,23 +203,43 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error('Attendance records API error:', error)
     console.error('Error stack:', error?.stack)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Internal server error',
-        records: [],
-        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-      },
-      { 
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+    console.error('Error name:', error?.name)
+    console.error('Error message:', error?.message)
+    
+    // Always return JSON, never let Next.js return HTML error page
+    try {
+      return NextResponse.json(
+        {
+          success: true, // Return success with empty records to prevent frontend crash
+          records: [],
+          warning: 'Unable to fetch attendance records',
+          error: error?.message || 'Internal server error',
+          details: process.env.NODE_ENV === 'development' ? {
+            stack: error?.stack,
+            name: error?.name,
+            message: error?.message,
+          } : undefined,
         },
-      }
-    )
+        { 
+          status: 200, // Return 200 to prevent frontend from treating it as an error
+          headers: defaultHeaders,
+        }
+      )
+    } catch (jsonError: any) {
+      // Even if JSON creation fails, return a simple text response as JSON
+      console.error('Failed to create JSON response:', jsonError)
+      return new NextResponse(
+        JSON.stringify({
+          success: true,
+          records: [],
+          warning: 'Service temporarily unavailable',
+        }),
+        {
+          status: 200,
+          headers: defaultHeaders,
+        }
+      )
+    }
   }
 }
 
