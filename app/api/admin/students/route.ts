@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { supabase } from '@/lib/supabaseClient' // Keep for fallback
 
 const mockStudents = [
   {
@@ -26,7 +27,16 @@ const mockStudents = [
 
 export async function GET() {
   try {
-    if (!supabase) {
+    // Use admin client for server-side operations (bypasses RLS)
+    let supabaseClient
+    try {
+      supabaseClient = getSupabaseAdmin()
+    } catch (adminError: any) {
+      console.error('Failed to get admin client, falling back to regular client:', adminError)
+      supabaseClient = supabase
+    }
+
+    if (!supabaseClient) {
       return NextResponse.json({
         success: true,
         students: mockStudents,
@@ -34,7 +44,7 @@ export async function GET() {
       })
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('students')
       .select('*')
       .order('created_at', { ascending: false })
