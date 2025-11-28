@@ -91,14 +91,24 @@ export async function POST(request: Request) {
     const student = students[0]
 
     // Update student with RFID card number
-    // Try to update both rfid_card and rfid_tag fields (depending on database schema)
-    const updateFields: any = {
-      rfid_tag: updateData.rfidCard, // Primary field in database
-    }
+    // Try to update all possible RFID field names
+    const updateFields: any = {}
     
-    // Also try to update rfid_card if the column exists
-    updateFields.rfid_card = updateData.rfidCard
-    updateFields.rfidCard = updateData.rfidCard
+    // Try all possible RFID column names
+    if (student.rfid_tag !== undefined) updateFields.rfid_tag = updateData.rfidCard
+    if (student.rfid_card !== undefined) updateFields.rfid_card = updateData.rfidCard
+    if (student.rfidCard !== undefined) updateFields.rfidCard = updateData.rfidCard
+    if (student.rfidTag !== undefined) updateFields.rfidTag = updateData.rfidCard
+    
+    // If no RFID fields exist, try to set them all (database will ignore non-existent columns)
+    if (Object.keys(updateFields).length === 0) {
+      updateFields.rfid_tag = updateData.rfidCard
+      updateFields.rfid_card = updateData.rfidCard
+      updateFields.rfidCard = updateData.rfidCard
+    }
+
+    console.log('Updating student with fields:', updateFields)
+    console.log('Student ID:', student.id)
 
     const { data: updatedStudent, error: updateError } = await admin
       .from('students')
@@ -109,20 +119,45 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error('Database error updating RFID:', updateError)
+      console.error('Error details:', JSON.stringify(updateError, null, 2))
       
-      // In development, return success even if table doesn't exist
-      if (process.env.NODE_ENV === 'development') {
-        console.log('RFID update (dev mode):', { email: updateData.email, rfidCard: updateData.rfidCard })
-        return NextResponse.json({
-          success: true,
-          message: 'RFID updated (dev mode - not saved to database)',
-        })
+      // Try updating without specifying which columns exist
+      // Just update what we can
+      const simpleUpdate: any = {}
+      // Try the most common field name first
+      simpleUpdate.rfid_tag = updateData.rfidCard
+      
+      const { data: retryUpdate, error: retryError } = await admin
+        .from('students')
+        .update(simpleUpdate)
+        .eq('id', student.id)
+        .select()
+        .single()
+      
+      if (retryError) {
+        console.error('Retry also failed:', retryError)
+        // In development, return success even if table doesn't exist
+        if (process.env.NODE_ENV === 'development') {
+          console.log('RFID update (dev mode):', { email: updateData.email, rfidCard: updateData.rfidCard })
+          return NextResponse.json({
+            success: true,
+            message: 'RFID updated (dev mode - not saved to database)',
+            student: student,
+          })
+        }
+        
+        return NextResponse.json(
+          { success: false, error: `Failed to update RFID: ${retryError.message}. Please check your database schema.` },
+          { status: 500 }
+        )
       }
       
-      return NextResponse.json(
-        { success: false, error: updateError.message },
-        { status: 500 }
-      )
+      // Retry succeeded
+      return NextResponse.json({
+        success: true,
+        student: retryUpdate,
+        message: 'RFID card number updated successfully',
+      })
     }
 
     // Remove password from response
