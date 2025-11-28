@@ -406,17 +406,24 @@ export async function POST(request: Request) {
     }
 
     // Fetch student information separately to avoid join issues
+    // Fetch all students and filter in memory to avoid UUID/TEXT comparison errors
     let studentInfo: any = null
     if (studentId) {
-      const { data: studentData } = await supabaseClient
+      // Fetch all students and filter in memory
+      const { data: allStudents } = await supabaseClient
         .from('students')
         .select('*')
-        .or(`student_id.eq.${studentId},student_number.eq.${studentId},id.eq.${studentId}`)
-        .limit(1)
-        .single()
+        .limit(1000)
       
-      if (studentData) {
-        studentInfo = studentData
+      if (allStudents) {
+        // Find matching student by comparing as strings
+        const studentIdStr = (studentId || '').toString().trim()
+        studentInfo = allStudents.find((student: any) => {
+          const sId = (student.student_id || '').toString().trim()
+          const sNum = (student.student_number || '').toString().trim()
+          const sUuid = (student.id || '').toString().trim()
+          return sId === studentIdStr || sNum === studentIdStr || sUuid === studentIdStr
+        }) || null
       }
     }
 
