@@ -266,18 +266,47 @@ export async function POST(request: Request) {
       
       console.log(`Found student: ${matchedStudent.first_name || matchedStudent.firstName || 'Unknown'} ${matchedStudent.last_name || matchedStudent.lastName || ''}`)
       
-      // Get student_id or student_number
-      studentId = matchedStudent.student_id || matchedStudent.student_number || matchedStudent.id || matchedStudent.studentId
+      // Get the UUID id (primary key) for the foreign key relationship
+      // attendance_records.student_id should reference students.id (UUID), not student_id (TEXT)
+      studentId = matchedStudent.id || matchedStudent.student_id || matchedStudent.student_number || matchedStudent.studentId
     }
 
     // Check if student has already scanned in today
-    const { data: todayRecords, error: checkError } = await supabaseClient
+    // studentId might be UUID or TEXT, so we need to handle both
+    let todayRecords: any[] = []
+    let checkError: any = null
+    
+    // Try to find records - student_id might be UUID or TEXT depending on schema
+    const { data: recordsByUuid, error: error1 } = await supabaseClient
       .from('attendance_records')
-      .select('id, scan_type, scan_time, time_in, time_out')
+      .select('id, scan_type, scan_time, time_in, time_out, student_id')
       .eq('student_id', studentId)
       .gte('scan_time', todayStart)
       .lte('scan_time', todayEndISO)
       .order('scan_time', { ascending: true })
+    
+    if (!error1 && recordsByUuid) {
+      todayRecords = recordsByUuid
+    } else {
+      // If UUID lookup failed, try text lookup (in case student_id is TEXT)
+      const { data: recordsByText, error: error2 } = await supabaseClient
+        .from('attendance_records')
+        .select('id, scan_type, scan_time, time_in, time_out, student_id')
+        .gte('scan_time', todayStart)
+        .lte('scan_time', todayEndISO)
+        .order('scan_time', { ascending: true })
+      
+      if (!error2 && recordsByText) {
+        // Filter in memory by student_id (text match)
+        todayRecords = recordsByText.filter((r: any) => {
+          const rId = (r.student_id || '').toString()
+          const sId = (studentId || '').toString()
+          return rId === sId
+        })
+      } else {
+        checkError = error2
+      }
+    }
 
     if (checkError) {
       console.error('Error checking existing records:', checkError)

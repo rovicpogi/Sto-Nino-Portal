@@ -2,9 +2,11 @@
 -- Run this in your Supabase SQL Editor
 
 -- Create attendance_records table if it doesn't exist
+-- Note: student_id can be UUID (if foreign key to students.id) or TEXT (if storing student_number)
+-- We'll use TEXT to be flexible
 CREATE TABLE IF NOT EXISTS attendance_records (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id TEXT,
+  student_id TEXT,  -- Can store UUID or student_number depending on your schema
   rfid_card TEXT,
   scan_time TIMESTAMPTZ,
   scan_type TEXT,
@@ -17,6 +19,8 @@ CREATE TABLE IF NOT EXISTS attendance_records (
 );
 
 -- Add columns if table exists but columns are missing
+-- If your attendance_records.student_id is UUID type, change this to UUID
+-- Otherwise keep it as TEXT
 ALTER TABLE attendance_records 
 ADD COLUMN IF NOT EXISTS student_id TEXT;
 
