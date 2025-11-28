@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-
-const supabase = createClient(supabaseUrl, supabaseKey)
+// Use admin client for server-side operations (uses SERVICE_ROLE_KEY, not anon key)
+// This is critical: server-side API routes MUST use service role key, not anon key
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -24,6 +22,7 @@ export async function GET() {
     // For now, return default settings
     // You can later implement database storage:
     /*
+    const supabase = getSupabaseAdmin() // Use admin client with service role key
     const { data, error } = await supabase
       .from("settings")
       .select("*")
@@ -58,7 +57,7 @@ export async function GET() {
         error: "Failed to fetch settings",
         settings: DEFAULT_SETTINGS,
       },
-      { status: 500 }
+      { status: 200 } // Return 200 instead of 500 to prevent frontend crashes
     )
   }
 }
@@ -83,6 +82,7 @@ export async function POST(request: Request) {
     // For now, just return the settings
     // You can later implement database storage:
     /*
+    const supabase = getSupabaseAdmin() // Use admin client with service role key
     const { data, error } = await supabase
       .from("settings")
       .upsert(
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
         success: false,
         error: error?.message || "Failed to save settings",
       },
-      { status: 500 }
+      { status: 200 } // Return 200 instead of 500 to prevent frontend crashes
     )
   }
 }
