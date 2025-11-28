@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 // Enable CORS for ESP32 requests
 export async function OPTIONS(request: Request) {
@@ -152,8 +153,10 @@ export async function POST(request: Request) {
       )
     }
 
-    const supabaseClient = supabase
-
+    // Use admin client for inserts to bypass RLS policies
+    // This avoids UUID/TEXT comparison errors in RLS policies
+    const supabaseClient = getSupabaseAdmin()
+    
     if (!supabaseClient) {
       console.error('Supabase client not initialized')
       if (process.env.NODE_ENV === 'development') {
