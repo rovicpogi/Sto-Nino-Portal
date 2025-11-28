@@ -64,9 +64,10 @@ export default function RfidDisplayPage() {
       }
       
       const result = await response.json()
+      console.log('API Response:', result)
       
       if (result.success && result.records) {
-        console.log('Fetched records:', result.records.length, result.records)
+        console.log('✅ Fetched records:', result.records.length, result.records)
         if (onlyNew && result.records.length > 0) {
           // Prepend new records to the beginning
           setAttendanceRecords((prev) => {
@@ -98,15 +99,26 @@ export default function RfidDisplayPage() {
           }
         } else {
           // Initial load
-          console.log('Initial load - setting records:', result.records.length)
+          console.log('✅ Initial load - setting records:', result.records.length)
           setAttendanceRecords(result.records)
           if (result.records.length > 0) {
             setLastScanTime(result.records[0].scanTime)
-            console.log('Latest record:', result.records[0])
+            console.log('✅ Latest record:', result.records[0])
+            console.log('✅ Display should show:', {
+              name: result.records[0].studentName,
+              grade: result.records[0].gradeLevel,
+              section: result.records[0].section,
+              isTeacher: result.records[0].isTeacher,
+              subject: result.records[0].subject
+            })
+          } else {
+            console.log('⚠️ No records in initial load')
           }
         }
       } else {
-        console.log('No records in response:', result)
+        console.log('❌ No records in response:', result)
+        console.log('Response success:', result.success)
+        console.log('Response records:', result.records)
       }
     } catch (error) {
       console.error("Error fetching live attendance:", error)
@@ -117,8 +129,17 @@ export default function RfidDisplayPage() {
 
   // Initial load
   useEffect(() => {
+    console.log('🔄 Component mounted - fetching initial data...')
     fetchLiveAttendance(false)
   }, [fetchLiveAttendance])
+
+  // Debug: Log when records change
+  useEffect(() => {
+    console.log('📊 Attendance records updated:', attendanceRecords.length)
+    if (attendanceRecords.length > 0) {
+      console.log('📊 First record:', attendanceRecords[0])
+    }
+  }, [attendanceRecords])
 
   // Poll for new records every 2 seconds
   useEffect(() => {
