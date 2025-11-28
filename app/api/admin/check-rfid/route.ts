@@ -88,31 +88,7 @@ export async function GET(request: Request) {
     const studentError = null // No error since we filtered in memory
 
     if (!students || students.length === 0) {
-      // Already tried partial match in the filter above
-      // If still no match, return not assigned
-        const student = partialMatch[0]
-        return NextResponse.json({
-          success: true,
-          assigned: true,
-          student: {
-            studentId: student.student_id || student.student_number || student.id || student.studentId || null,
-            name: `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() || student.name || 'Unknown',
-            email: student.email || null,
-            gradeLevel: student.grade_level || student.gradeLevel || null,
-            section: student.section || null,
-            rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag || null,
-          },
-          searchedRfid: rfidNormalized,
-          matchType: 'partial'
-        }, {
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-          },
-        })
-      }
-      
+      // No student found with this RFID
       return NextResponse.json({
         success: true,
         assigned: false,
