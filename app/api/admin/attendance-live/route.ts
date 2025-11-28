@@ -217,6 +217,18 @@ export async function GET(request: Request) {
       }
     }
 
+    // If we have no data, return empty array
+    if (!data || data.length === 0) {
+      console.log('No attendance records found')
+      return NextResponse.json({
+        success: true,
+        records: []
+      }, {
+        status: 200,
+        headers: defaultHeaders,
+      })
+    }
+    
     // Format the response
     const formattedRecords = (data || []).map((record: any) => {
       // Determine scan type from database fields
