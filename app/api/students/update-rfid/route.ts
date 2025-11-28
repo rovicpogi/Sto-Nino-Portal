@@ -40,16 +40,38 @@ export async function POST(request: Request) {
     }
 
     // Build query to find student
-    let query = admin.from('students').select('*')
+    let students: any[] = []
+    let findError: any = null
     
     if (updateData.email) {
-      query = query.eq('email', updateData.email.toLowerCase().trim())
+      // Find by email
+      const { data, error } = await admin
+        .from('students')
+        .select('*')
+        .eq('email', updateData.email.toLowerCase().trim())
+        .limit(10)
+      students = data || []
+      findError = error
     } else if (updateData.studentId) {
-      // Try both student_id and student_number fields
-      query = query.or(`student_id.eq.${updateData.studentId},student_number.eq.${updateData.studentId}`)
+      // Find by student ID - get all and filter in memory to avoid column errors
+      const { data: allStudents, error } = await admin
+        .from('students')
+        .select('*')
+        .limit(1000)
+      
+      if (!error && allStudents) {
+        students = allStudents.filter((s: any) => {
+          const id1 = (s.student_id || '').toString()
+          const id2 = (s.student_number || '').toString()
+          const id3 = (s.id || '').toString()
+          const id4 = (s.studentId || '').toString()
+          const searchId = updateData.studentId.toString()
+          return id1 === searchId || id2 === searchId || id3 === searchId || id4 === searchId
+        })
+      } else {
+        findError = error
+      }
     }
-
-    const { data: students, error: findError } = await query
 
     if (findError) {
       console.error('Database error finding student:', findError)
