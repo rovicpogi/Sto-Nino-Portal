@@ -120,12 +120,17 @@ export default function RfidDisplayPage() {
     }
   }, [latestScan])
 
-  // Poll for new records every 2 seconds
+  // Auto-refresh: Poll for new records every 2 seconds
   useEffect(() => {
+    console.log('🔄 Starting auto-refresh (every 2 seconds)')
     const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing...')
       fetchLiveAttendance(true)
-    }, 2000)
-    return () => clearInterval(interval)
+    }, 2000) // 2 seconds = 2000ms
+    return () => {
+      console.log('🔄 Stopping auto-refresh')
+      clearInterval(interval)
+    }
   }, [fetchLiveAttendance])
 
   // Update current time on client side only
