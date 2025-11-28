@@ -13,6 +13,11 @@ ALTER COLUMN rfid_card DROP NOT NULL;
 ALTER TABLE attendance_records 
 ALTER COLUMN device_id DROP NOT NULL;
 
+-- Change device_id from UUID to TEXT (if it's currently UUID type)
+-- This allows storing device identifiers like "ESP32"
+ALTER TABLE attendance_records 
+ALTER COLUMN device_id TYPE TEXT USING device_id::TEXT;
+
 -- Verify the columns are now nullable
 SELECT column_name, data_type, is_nullable 
 FROM information_schema.columns 

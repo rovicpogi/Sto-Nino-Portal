@@ -365,8 +365,10 @@ export async function POST(request: Request) {
       attendanceRecord.rfid_tag = ''
     }
     
-    // Set device_id to avoid NOT NULL constraint (use ESP32 or empty string)
-    attendanceRecord.device_id = scanData.deviceId || 'ESP32' || ''
+    // Set device_id - if column is UUID type, we can't use text, so set to null
+    // If column is TEXT type, we can use a device identifier
+    // For now, don't set it to avoid UUID type errors
+    // attendanceRecord.device_id = scanData.deviceId || null
     
     attendanceRecord.scan_time = currentTime
     attendanceRecord.scan_type = scanType
