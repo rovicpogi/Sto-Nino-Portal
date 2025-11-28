@@ -44,37 +44,28 @@ export async function GET(request: Request) {
     }
 
     // Fetch student information for all records
+    // student_id in attendance_records is now TEXT, so we need to handle it carefully
     const studentIds = [...new Set((data || []).map((r: any) => r.student_id).filter(Boolean))]
     const studentMap: Record<string, any> = {}
     
     if (studentIds.length > 0) {
-      // Fetch all students at once
-      const { data: studentsData } = await supabaseClient
+      // Fetch all students and filter in memory to avoid UUID/TEXT comparison issues
+      const { data: allStudents } = await supabaseClient
         .from('students')
         .select('*')
-        .in('student_id', studentIds.length > 0 ? studentIds : [''])
         .limit(1000)
       
-      // Also try student_number and id
-      if (!studentsData || studentsData.length === 0) {
-        const { data: studentsByNumber } = await supabaseClient
-          .from('students')
-          .select('*')
-          .in('student_number', studentIds)
-          .limit(1000)
-        
-        if (studentsByNumber) {
-          studentsData?.push(...studentsByNumber)
-        }
-      }
-      
-      // Create a map for quick lookup
-      if (studentsData) {
-        studentsData.forEach((student: any) => {
-          const key = student.student_id || student.student_number || student.id
-          if (key) {
-            studentMap[key] = student
-          }
+      if (allStudents) {
+        // Create a map for quick lookup - check all possible ID fields
+        allStudents.forEach((student: any) => {
+          const studentIdStr = (student.student_id || '').toString().trim()
+          const studentNumberStr = (student.student_number || '').toString().trim()
+          const studentIdUuid = (student.id || '').toString().trim()
+          
+          // Map by all possible identifiers
+          if (studentIdStr) studentMap[studentIdStr] = student
+          if (studentNumberStr) studentMap[studentNumberStr] = student
+          if (studentIdUuid) studentMap[studentIdUuid] = student
         })
       }
     }
@@ -272,40 +263,29 @@ export async function POST(request: Request) {
     }
 
     // Check if student has already scanned in today
-    // studentId might be UUID or TEXT, so we need to handle both
+    // student_id is now TEXT type, so we can query directly
+    // But we need to cast to text to avoid UUID comparison errors
     let todayRecords: any[] = []
     let checkError: any = null
     
-    // Try to find records - student_id might be UUID or TEXT depending on schema
-    const { data: recordsByUuid, error: error1 } = await supabaseClient
+    // Fetch all records for today, then filter in memory to avoid type mismatch
+    const { data: allTodayRecords, error: fetchError } = await supabaseClient
       .from('attendance_records')
       .select('id, scan_type, scan_time, time_in, time_out, student_id')
-      .eq('student_id', studentId)
       .gte('scan_time', todayStart)
       .lte('scan_time', todayEndISO)
       .order('scan_time', { ascending: true })
     
-    if (!error1 && recordsByUuid) {
-      todayRecords = recordsByUuid
-    } else {
-      // If UUID lookup failed, try text lookup (in case student_id is TEXT)
-      const { data: recordsByText, error: error2 } = await supabaseClient
-        .from('attendance_records')
-        .select('id, scan_type, scan_time, time_in, time_out, student_id')
-        .gte('scan_time', todayStart)
-        .lte('scan_time', todayEndISO)
-        .order('scan_time', { ascending: true })
-      
-      if (!error2 && recordsByText) {
-        // Filter in memory by student_id (text match)
-        todayRecords = recordsByText.filter((r: any) => {
-          const rId = (r.student_id || '').toString()
-          const sId = (studentId || '').toString()
-          return rId === sId
-        })
-      } else {
-        checkError = error2
-      }
+    if (fetchError) {
+      checkError = fetchError
+      console.error('Error fetching today records:', fetchError)
+    } else if (allTodayRecords) {
+      // Filter in memory by student_id (text match) to avoid UUID/TEXT comparison issues
+      todayRecords = allTodayRecords.filter((r: any) => {
+        const rId = (r.student_id || '').toString().trim()
+        const sId = (studentId || '').toString().trim()
+        return rId === sId || rId === studentId || sId === r.student_id
+      })
     }
 
     if (checkError) {
