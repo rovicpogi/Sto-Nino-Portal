@@ -91,10 +91,11 @@ export async function POST(request: Request) {
     const student = students[0]
 
     // Update student with RFID card number
-    // Try to update rfid_tag first (most common column name)
-    // If that fails, the column doesn't exist and user needs to add it
+    // Try to update rfid_card first (what ESP32 expects)
+    // Also try rfid_tag as fallback
     const updateFields: any = {
-      rfid_tag: updateData.rfidCard
+      rfid_card: updateData.rfidCard,  // Primary - what ESP32 looks for
+      rfid_tag: updateData.rfidCard    // Fallback
     }
 
     console.log('Updating student with RFID:', updateData.rfidCard)
@@ -114,16 +115,15 @@ export async function POST(request: Request) {
       
       // Check if error is about missing column
       if (updateError.message && (
-        updateError.message.includes('column') && 
-        updateError.message.includes('does not exist') ||
+        (updateError.message.includes('column') && updateError.message.includes('does not exist')) ||
         updateError.message.includes('rfid_tag') ||
         updateError.message.includes('rfid_card')
       )) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `RFID column not found in database. Please add an 'rfid_tag' column to your 'students' table in Supabase. See add-rfid-column.sql for SQL script.`,
-            hint: 'Run this SQL in Supabase: ALTER TABLE students ADD COLUMN rfid_tag TEXT;'
+            error: `RFID column not found in database. Please add an 'rfid_card' column to your 'students' table in Supabase.`,
+            hint: 'Run this SQL in Supabase: ALTER TABLE students ADD COLUMN rfid_card TEXT;'
           },
           { status: 500 }
         )

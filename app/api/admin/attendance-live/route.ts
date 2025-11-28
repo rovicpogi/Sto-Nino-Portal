@@ -198,12 +198,14 @@ export async function POST(request: Request) {
       }
 
       // Filter students in memory by RFID (check all possible column names)
+      // Priority: rfid_card (what ESP32 expects) > rfidCard > rfid_tag > rfidTag
       const students = (allStudents || []).filter((student: any) => {
-        const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()
+        const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()  // Primary - ESP32 expects this
         const rfid2 = (student.rfidCard || '').toString().trim().toUpperCase()
         const rfid3 = (student.rfid_tag || '').toString().trim().toUpperCase()
         const rfid4 = (student.rfidTag || '').toString().trim().toUpperCase()
         
+        // Check exact matches first, then partial
         return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
                rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
                rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
