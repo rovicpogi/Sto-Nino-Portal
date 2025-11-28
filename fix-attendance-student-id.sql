@@ -44,22 +44,44 @@ CREATE POLICY "Students view own attendance" ON attendance_records
   );
 
 -- Allow parents to view their children's attendance
+-- NOTE: Adjust this policy based on your actual parent-student relationship schema
+-- Common options:
+-- 1. If you have a parent_id or parent_user_id column in students table
+-- 2. If you have a separate parent_students junction table
+-- 3. If parents are linked via email matching
+
+-- Option 1: If students table has parent_id or parent_user_id
 CREATE POLICY "Parents view children attendance" ON attendance_records
   FOR SELECT
   USING (
     student_id IN (
       SELECT student_id::text FROM students 
-      WHERE parent_email IN (
-        SELECT email FROM auth.users WHERE id = auth.uid()
-      )
+      WHERE parent_id = auth.uid()::text
+         OR parent_user_id = auth.uid()::text
     )
     OR student_id IN (
       SELECT student_number FROM students 
-      WHERE parent_email IN (
-        SELECT email FROM auth.users WHERE id = auth.uid()
-      )
+      WHERE parent_id = auth.uid()::text
+         OR parent_user_id = auth.uid()::text
     )
   );
+
+-- If the above doesn't work, comment it out and use one of these alternatives:
+
+-- Option 2: If you have a parent_students junction table
+-- CREATE POLICY "Parents view children attendance" ON attendance_records
+--   FOR SELECT
+--   USING (
+--     student_id IN (
+--       SELECT student_id::text FROM parent_students 
+--       WHERE parent_id = auth.uid()::text
+--     )
+--   );
+
+-- Option 3: If parents can see all records (less secure)
+-- CREATE POLICY "Parents view children attendance" ON attendance_records
+--   FOR SELECT
+--   USING (true);
 
 -- Allow authenticated users to insert attendance records (for RFID system)
 CREATE POLICY "Enable insert for authenticated users" ON attendance_records
