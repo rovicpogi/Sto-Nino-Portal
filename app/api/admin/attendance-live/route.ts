@@ -20,9 +20,12 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const since = searchParams.get('since') // Optional: get records since this timestamp
 
+    // Use admin client to avoid RLS UUID/TEXT comparison errors
+    const supabaseClient = getSupabaseAdmin()
+
     // Fetch recent attendance records
     // Don't use join to avoid foreign key issues - fetch students separately
-    let query = supabase
+    let query = supabaseClient
       .from('attendance_records')
       .select('*')
       .order('scan_time', { ascending: false })
