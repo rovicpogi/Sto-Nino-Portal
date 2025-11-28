@@ -44,19 +44,18 @@ export async function GET(request: Request) {
     console.log(`Checking RFID: ${rfidNormalized}`)
     
     // Try to find student by RFID
-    // Select all columns to avoid issues with missing columns
-    const { data: students, error: studentError } = await supabase
+    // First, get all students and filter in memory to avoid column errors
+    const { data: allStudents, error: fetchError } = await supabase
       .from('students')
       .select('*')
-      .or(`rfid_card.eq.${rfidNormalized},rfidCard.eq.${rfidNormalized},rfid_tag.eq.${rfidNormalized},rfid_card.eq.${rfidNoLeadingZeros},rfidCard.eq.${rfidNoLeadingZeros},rfid_tag.eq.${rfidNoLeadingZeros}`)
-      .limit(1)
+      .limit(1000) // Get reasonable number of students
 
-    if (studentError) {
-      console.error('Error checking RFID:', studentError)
+    if (fetchError) {
+      console.error('Error fetching students:', fetchError)
       return NextResponse.json(
         { 
           success: false, 
-          error: `Database error: ${studentError.message}`,
+          error: `Database error: ${fetchError.message}`,
           assigned: false,
           searchedRfid: rfidNormalized
         },
@@ -71,15 +70,26 @@ export async function GET(request: Request) {
       )
     }
 
-    if (!students || students.length === 0) {
-      // Try partial match
-      const { data: partialMatch } = await supabase
-        .from('students')
-        .select('*')
-        .or(`rfid_card.ilike.%${rfidNormalized}%,rfidCard.ilike.%${rfidNormalized}%,rfid_tag.ilike.%${rfidNormalized}%`)
-        .limit(1)
+    // Filter students in memory by RFID (check all possible column names)
+    const students = (allStudents || []).filter((student: any) => {
+      const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()
+      const rfid2 = (student.rfidCard || '').toString().trim().toUpperCase()
+      const rfid3 = (student.rfid_tag || '').toString().trim().toUpperCase()
+      const rfid4 = (student.rfidTag || '').toString().trim().toUpperCase()
       
-      if (partialMatch && partialMatch.length > 0) {
+      return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
+             rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
+             rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
+             rfid4 === rfidNormalized || rfid4 === rfidNoLeadingZeros ||
+             rfid1.includes(rfidNormalized) || rfid2.includes(rfidNormalized) ||
+             rfid3.includes(rfidNormalized) || rfid4.includes(rfidNormalized)
+    })
+
+    const studentError = null // No error since we filtered in memory
+
+    if (!students || students.length === 0) {
+      // Already tried partial match in the filter above
+      // If still no match, return not assigned
         const student = partialMatch[0]
         return NextResponse.json({
           success: true,
