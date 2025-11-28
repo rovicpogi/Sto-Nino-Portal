@@ -40,8 +40,8 @@ export default function RfidDisplayPage() {
     setLoadingAttendance(true)
     try {
       const url = onlyNew && lastScanTime
-        ? `/api/admin/attendance-live?since=${lastScanTime}&limit=50`
-        : `/api/admin/attendance-live?limit=50`
+        ? `/api/admin/attendance-live?since=${lastScanTime}&limit=1`
+        : `/api/admin/attendance-live?limit=1`
       
       const response = await fetch(url)
       
@@ -66,16 +66,29 @@ export default function RfidDisplayPage() {
       console.log('API Response:', result)
       
       if (result.success && result.records && result.records.length > 0) {
-        console.log('✅ Fetched records:', result.records.length)
-        
-        // Always show the LATEST scan (first record in the array, which is sorted by newest first)
         const latest = result.records[0]
         console.log('✅ Latest scan:', latest)
+        
+        // Check if this is a NEW scan (different from current latest scan)
+        if (onlyNew && latestScan) {
+          // Compare by ID or scan time to detect new scans
+          const isNewScan = latest.id !== latestScan.id || 
+                           latest.scanTime !== latestScan.scanTime
+          
+          if (isNewScan) {
+            console.log('🆕 NEW SCAN DETECTED! Refreshing page...')
+            // Refresh the entire page/tab
+            window.location.reload()
+            return // Exit early since page is reloading
+          } else {
+            console.log('ℹ️ No new scan - same as current')
+          }
+        }
         
         // Update latest scan display
         setLatestScan(latest)
         
-        // Also update the records list for history
+        // Update records list
         if (onlyNew && result.records.length > 0) {
           setAttendanceRecords((prev) => {
             const newRecords = result.records.filter(
@@ -103,7 +116,7 @@ export default function RfidDisplayPage() {
     } finally {
       setLoadingAttendance(false)
     }
-  }, [lastScanTime])
+  }, [lastScanTime, latestScan])
 
   // Initial load
   useEffect(() => {
@@ -121,10 +134,12 @@ export default function RfidDisplayPage() {
   }, [latestScan])
 
   // Auto-refresh: Poll for new records every 2 seconds
+  // If a new scan is detected, the entire page will refresh
   useEffect(() => {
     console.log('🔄 Starting auto-refresh (every 2 seconds)')
+    console.log('🔄 Page will auto-refresh when new scan is detected')
     const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing...')
+      console.log('🔄 Checking for new scans...')
       fetchLiveAttendance(true)
     }, 2000) // 2 seconds = 2000ms
     return () => {
