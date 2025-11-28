@@ -60,7 +60,10 @@ BEGIN
 END;
 $$;
 
--- Grant execute permission
--- GRANT EXECUTE ON FUNCTION get_attendance_records TO authenticated;
--- GRANT EXECUTE ON FUNCTION get_attendance_records TO service_role;
+-- Grant execute permission to service_role (for admin client)
+GRANT EXECUTE ON FUNCTION get_attendance_records TO service_role;
+GRANT EXECUTE ON FUNCTION get_attendance_records TO authenticated;
+
+-- Also grant to anon if needed
+GRANT EXECUTE ON FUNCTION get_attendance_records TO anon;
 

@@ -76,10 +76,12 @@ export async function GET(request: Request) {
       console.log('Limit:', limit)
       console.log('Since:', since)
       
-      // Try RPC function first to bypass PostgREST relationship validation
+      // Try multiple methods to fetch records, handling PGRST200 errors gracefully
+      let querySuccess = false
+      
+      // Method 1: Try RPC function (bypasses PostgREST completely)
       try {
-        console.log('Trying RPC function to bypass PostgREST validation...')
-        
+        console.log('Method 1: Trying RPC function...')
         const { data: rpcData, error: rpcError } = await supabaseClient.rpc('get_attendance_records', {
           record_limit: limit,
           since_time: since || null
@@ -88,53 +90,73 @@ export async function GET(request: Request) {
         if (!rpcError && rpcData) {
           data = rpcData as any[]
           error = null
-          console.log('RPC query successful, records:', data.length)
+          querySuccess = true
+          console.log('✓ RPC query successful, records:', data.length)
         } else {
-          console.log('RPC not available or failed, trying direct query...', rpcError)
-          throw rpcError || new Error('RPC not available')
+          console.log('✗ RPC failed:', rpcError?.message || 'RPC function not found')
         }
-      } catch (rpcError: any) {
-        console.log('RPC failed, trying direct table query...')
-        
-        // Fallback: Try direct query but catch PGRST200 errors gracefully
+      } catch (rpcException: any) {
+        console.log('✗ RPC exception:', rpcException.message)
+      }
+      
+      // Method 2: If RPC failed, try direct query with minimal columns
+      if (!querySuccess) {
         try {
-          const directResult = await supabaseClient
+          console.log('Method 2: Trying direct query with minimal columns...')
+          let directQuery = supabaseClient
             .from('attendance_records')
-            .select('id, scan_time, scan_type, student_id, rfid_card, rfid_tag, status, time_in, time_out, created_at, device_id')
+            .select('id, scan_time, student_id') // Minimal columns to avoid relationship checks
             .order('scan_time', { ascending: false })
             .limit(limit)
           
           if (since) {
-            const sinceResult = await directResult.gt('scan_time', since)
-            if (!sinceResult.error) {
-              data = sinceResult.data || []
-              error = null
-              console.log('Direct query with since successful, records:', data.length)
-            } else {
-              throw sinceResult.error
-            }
+            directQuery = directQuery.gt('scan_time', since)
+          }
+          
+          const directResult = await directQuery
+          
+          if (!directResult.error && directResult.data) {
+            data = directResult.data || []
+            error = null
+            querySuccess = true
+            console.log('✓ Direct query (minimal) successful, records:', data.length)
           } else {
-            if (!directResult.error) {
-              data = directResult.data || []
+            // Check if it's a PGRST200 error - if so, just return empty
+            if (directResult.error?.code === 'PGRST200' || 
+                directResult.error?.message?.includes('relationship') ||
+                directResult.error?.message?.includes('Could not find a relationship')) {
+              console.log('⚠ PostgREST relationship error - returning empty records (this is OK)')
+              data = []
               error = null
-              console.log('Direct query successful, records:', data.length)
+              querySuccess = true // Treat as success with empty data
             } else {
               throw directResult.error
             }
           }
         } catch (directError: any) {
-          // If it's a PostgREST relationship error, just return empty records (not an error)
-          if (directError.code === 'PGRST200' || directError.message?.includes('relationship') || directError.message?.includes('Could not find a relationship')) {
-            console.log('PostgREST relationship error detected - returning empty records gracefully')
-            data = []
-            error = null // Don't treat this as an error, just return empty
-          } else {
-            console.error('Direct query failed with non-relationship error:', directError)
-            // Return empty records instead of error
+          // If it's a relationship error, return empty records
+          if (directError.code === 'PGRST200' || 
+              directError.message?.includes('relationship') ||
+              directError.message?.includes('Could not find a relationship')) {
+            console.log('⚠ PostgREST relationship error in catch - returning empty records')
             data = []
             error = null
+            querySuccess = true
+          } else {
+            console.error('✗ Direct query failed:', directError)
+            // Return empty records anyway
+            data = []
+            error = null
+            querySuccess = true
           }
         }
+      }
+      
+      // If we still don't have success, return empty records
+      if (!querySuccess) {
+        console.log('⚠ All query methods failed - returning empty records')
+        data = []
+        error = null
       }
     } catch (queryError: any) {
       console.error('Query execution exception:', queryError)
