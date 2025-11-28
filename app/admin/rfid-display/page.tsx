@@ -66,6 +66,7 @@ export default function RfidDisplayPage() {
       const result = await response.json()
       
       if (result.success && result.records) {
+        console.log('Fetched records:', result.records.length, result.records)
         if (onlyNew && result.records.length > 0) {
           // Prepend new records to the beginning
           setAttendanceRecords((prev) => {
@@ -73,6 +74,7 @@ export default function RfidDisplayPage() {
               (newRec: AttendanceRecord) => !prev.some((p) => p.id === newRec.id)
             )
             const updated = [...newRecords, ...prev].slice(0, 50)
+            console.log('Updated records:', updated.length, 'New:', newRecords.length)
             
             // Flash the newest record for 2 seconds
             if (newRecords.length > 0) {
@@ -96,11 +98,15 @@ export default function RfidDisplayPage() {
           }
         } else {
           // Initial load
+          console.log('Initial load - setting records:', result.records.length)
           setAttendanceRecords(result.records)
           if (result.records.length > 0) {
             setLastScanTime(result.records[0].scanTime)
+            console.log('Latest record:', result.records[0])
           }
         }
+      } else {
+        console.log('No records in response:', result)
       }
     } catch (error) {
       console.error("Error fetching live attendance:", error)
@@ -242,22 +248,22 @@ export default function RfidDisplayPage() {
         </div>
 
         {/* Latest Scan Display - Large Prominent Display */}
-        {attendanceRecords.length > 0 && (
+        {attendanceRecords.length > 0 ? (
           <Card className="mb-6 border-4 border-red-500 bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl">
             <CardContent className="p-8">
               <div className="flex items-center justify-center gap-8">
                 {/* Photo */}
                 <div className="flex-shrink-0">
-                  {attendanceRecords[0].studentPhoto ? (
+                  {attendanceRecords[0]?.studentPhoto ? (
                     <Image
                       src={attendanceRecords[0].studentPhoto}
-                      alt={attendanceRecords[0].studentName}
+                      alt={attendanceRecords[0]?.studentName || "Student"}
                       width={200}
                       height={200}
                       className="rounded-full border-4 border-red-500 shadow-2xl object-cover"
                     />
                   ) : (
-                    <div className="w-50 h-50 rounded-full border-4 border-red-500 bg-gray-700 flex items-center justify-center shadow-2xl">
+                    <div className="w-[200px] h-[200px] rounded-full border-4 border-red-500 bg-gray-700 flex items-center justify-center shadow-2xl">
                       <User className="w-24 h-24 text-gray-400" />
                     </div>
                   )}
@@ -267,29 +273,29 @@ export default function RfidDisplayPage() {
                 <div className="flex-1 text-center">
                   <div className="mb-6">
                     <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Name</div>
-                    <div className="text-5xl font-bold text-white mb-4">{attendanceRecords[0].studentName}</div>
+                    <div className="text-5xl font-bold text-white mb-4">{attendanceRecords[0]?.studentName || "Unknown"}</div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-6 mb-6">
                     {/* For Students: Grade & Section */}
-                    {!attendanceRecords[0].isTeacher && (
+                    {!attendanceRecords[0]?.isTeacher && (
                       <>
                         <div>
                           <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Grade Level</div>
-                          <div className="text-3xl font-bold text-white">{attendanceRecords[0].gradeLevel || "N/A"}</div>
+                          <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.gradeLevel || "N/A"}</div>
                         </div>
                         <div>
                           <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Section</div>
-                          <div className="text-3xl font-bold text-white">{attendanceRecords[0].section || "N/A"}</div>
+                          <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.section || "N/A"}</div>
                         </div>
                       </>
                     )}
                     
                     {/* For Teachers: Subject */}
-                    {attendanceRecords[0].isTeacher && (
+                    {attendanceRecords[0]?.isTeacher && (
                       <div className="col-span-2">
                         <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Subject</div>
-                        <div className="text-3xl font-bold text-white">{attendanceRecords[0].subject || "N/A"}</div>
+                        <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.subject || "N/A"}</div>
                       </div>
                     )}
                   </div>
@@ -297,11 +303,11 @@ export default function RfidDisplayPage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Date</div>
-                      <div className="text-2xl font-bold text-white">{formatDate(attendanceRecords[0].scanTime)}</div>
+                      <div className="text-2xl font-bold text-white">{attendanceRecords[0]?.scanTime ? formatDate(attendanceRecords[0].scanTime) : "N/A"}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Time</div>
-                      <div className="text-2xl font-bold text-white">{formatTime(attendanceRecords[0].scanTime)}</div>
+                      <div className="text-2xl font-bold text-white">{attendanceRecords[0]?.scanTime ? formatTime(attendanceRecords[0].scanTime) : "N/A"}</div>
                     </div>
                   </div>
                   
@@ -309,15 +315,15 @@ export default function RfidDisplayPage() {
                   <div className="mt-6">
                     <Badge
                       className={
-                        attendanceRecords[0].scanType === "timein"
+                        attendanceRecords[0]?.scanType === "timein"
                           ? "bg-green-600 text-white text-xl px-6 py-2"
-                          : attendanceRecords[0].scanType === "timeout"
+                          : attendanceRecords[0]?.scanType === "timeout"
                           ? "bg-orange-600 text-white text-xl px-6 py-2"
                           : "bg-gray-600 text-white text-xl px-6 py-2"
                       }
                     >
-                      {attendanceRecords[0].scanType === "timein" ? "TIME IN" : 
-                       attendanceRecords[0].scanType === "timeout" ? "TIME OUT" : 
+                      {attendanceRecords[0]?.scanType === "timein" ? "TIME IN" : 
+                       attendanceRecords[0]?.scanType === "timeout" ? "TIME OUT" : 
                        "SCAN RECORDED"}
                     </Badge>
                   </div>
@@ -325,7 +331,7 @@ export default function RfidDisplayPage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* No Scans Message */}
         {attendanceRecords.length === 0 && (
