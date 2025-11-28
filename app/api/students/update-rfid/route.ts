@@ -91,24 +91,15 @@ export async function POST(request: Request) {
     const student = students[0]
 
     // Update student with RFID card number
-    // Try to update all possible RFID field names
-    const updateFields: any = {}
-    
-    // Try all possible RFID column names
-    if (student.rfid_tag !== undefined) updateFields.rfid_tag = updateData.rfidCard
-    if (student.rfid_card !== undefined) updateFields.rfid_card = updateData.rfidCard
-    if (student.rfidCard !== undefined) updateFields.rfidCard = updateData.rfidCard
-    if (student.rfidTag !== undefined) updateFields.rfidTag = updateData.rfidCard
-    
-    // If no RFID fields exist, try to set them all (database will ignore non-existent columns)
-    if (Object.keys(updateFields).length === 0) {
-      updateFields.rfid_tag = updateData.rfidCard
-      updateFields.rfid_card = updateData.rfidCard
-      updateFields.rfidCard = updateData.rfidCard
+    // Try to update rfid_tag first (most common column name)
+    // If that fails, the column doesn't exist and user needs to add it
+    const updateFields: any = {
+      rfid_tag: updateData.rfidCard
     }
 
-    console.log('Updating student with fields:', updateFields)
+    console.log('Updating student with RFID:', updateData.rfidCard)
     console.log('Student ID:', student.id)
+    console.log('Student email:', student.email)
 
     const { data: updatedStudent, error: updateError } = await admin
       .from('students')
@@ -119,45 +110,34 @@ export async function POST(request: Request) {
 
     if (updateError) {
       console.error('Database error updating RFID:', updateError)
-      console.error('Error details:', JSON.stringify(updateError, null, 2))
+      console.error('Error message:', updateError.message)
       
-      // Try updating without specifying which columns exist
-      // Just update what we can
-      const simpleUpdate: any = {}
-      // Try the most common field name first
-      simpleUpdate.rfid_tag = updateData.rfidCard
-      
-      const { data: retryUpdate, error: retryError } = await admin
-        .from('students')
-        .update(simpleUpdate)
-        .eq('id', student.id)
-        .select()
-        .single()
-      
-      if (retryError) {
-        console.error('Retry also failed:', retryError)
-        // In development, return success even if table doesn't exist
-        if (process.env.NODE_ENV === 'development') {
-          console.log('RFID update (dev mode):', { email: updateData.email, rfidCard: updateData.rfidCard })
-          return NextResponse.json({
-            success: true,
-            message: 'RFID updated (dev mode - not saved to database)',
-            student: student,
-          })
-        }
-        
+      // Check if error is about missing column
+      if (updateError.message && (
+        updateError.message.includes('column') && 
+        updateError.message.includes('does not exist') ||
+        updateError.message.includes('rfid_tag') ||
+        updateError.message.includes('rfid_card')
+      )) {
         return NextResponse.json(
-          { success: false, error: `Failed to update RFID: ${retryError.message}. Please check your database schema.` },
+          { 
+            success: false, 
+            error: `RFID column not found in database. Please add an 'rfid_tag' column to your 'students' table in Supabase. See add-rfid-column.sql for SQL script.`,
+            hint: 'Run this SQL in Supabase: ALTER TABLE students ADD COLUMN rfid_tag TEXT;'
+          },
           { status: 500 }
         )
       }
       
-      // Retry succeeded
-      return NextResponse.json({
-        success: true,
-        student: retryUpdate,
-        message: 'RFID card number updated successfully',
-      })
+      // Other database errors
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `Failed to update RFID: ${updateError.message}`,
+          details: 'Please check your database connection and permissions.'
+        },
+        { status: 500 }
+      )
     }
 
     // Remove password from response
