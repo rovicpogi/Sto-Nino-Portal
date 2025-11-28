@@ -1,8 +1,14 @@
 -- SQL script to change attendance_records.student_id from UUID to TEXT
 -- This handles RLS policies that depend on the column
 
--- Step 1: Drop ALL existing policies that depend on student_id
--- Get all policies first, then drop them
+-- Step 1: Drop foreign key constraint first (if it exists)
+ALTER TABLE attendance_records 
+DROP CONSTRAINT IF EXISTS attendance_records_student_id_fkey;
+
+ALTER TABLE attendance_records 
+DROP CONSTRAINT IF EXISTS attendance_records_student_id_students_id_fkey;
+
+-- Step 2: Drop ALL existing policies that depend on student_id
 DROP POLICY IF EXISTS "Students view own attendance" ON attendance_records;
 DROP POLICY IF EXISTS "Students can view own attendance" ON attendance_records;
 DROP POLICY IF EXISTS "Parents view children attendance" ON attendance_records;
@@ -16,12 +22,12 @@ DROP POLICY IF EXISTS "Enable delete for authenticated users" ON attendance_reco
 -- Uncomment the line below if you want to drop all policies at once
 -- DO $$ DECLARE r RECORD; BEGIN FOR r IN (SELECT policyname FROM pg_policies WHERE tablename = 'attendance_records') LOOP EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON attendance_records'; END LOOP; END $$;
 
--- Step 2: Change student_id column type from UUID to TEXT
+-- Step 3: Change student_id column type from UUID to TEXT
 -- This allows storing both UUID and student numbers
 ALTER TABLE attendance_records 
 ALTER COLUMN student_id TYPE TEXT USING student_id::TEXT;
 
--- Step 3: Recreate policies (adjust these based on your actual RLS requirements)
+-- Step 4: Recreate policies (adjust these based on your actual RLS requirements)
 -- Example policies - modify as needed for your security requirements
 
 -- Allow students to read their own attendance records
@@ -72,9 +78,30 @@ CREATE POLICY "Enable insert for authenticated users" ON attendance_records
 --     )
 --   );
 
+-- Step 5: (Optional) Create a check constraint or index for better performance
+-- Since we're using TEXT now, we can't have a foreign key to UUID
+-- But we can create an index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_attendance_student_id_text ON attendance_records(student_id);
+
 -- Verify the column type was changed
 SELECT column_name, data_type 
 FROM information_schema.columns 
 WHERE table_name = 'attendance_records' 
 AND column_name = 'student_id';
+
+-- Show that foreign key was dropped
+SELECT 
+    tc.constraint_name, 
+    tc.table_name, 
+    kcu.column_name,
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name 
+FROM information_schema.table_constraints AS tc 
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+LEFT JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+WHERE tc.table_name = 'attendance_records' 
+  AND tc.constraint_type = 'FOREIGN KEY'
+  AND kcu.column_name = 'student_id';
 
