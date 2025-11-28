@@ -28,6 +28,9 @@ ALTER TABLE attendance_records
 ADD COLUMN IF NOT EXISTS rfid_card TEXT;
 
 ALTER TABLE attendance_records 
+ADD COLUMN IF NOT EXISTS rfid_tag TEXT;
+
+ALTER TABLE attendance_records 
 ADD COLUMN IF NOT EXISTS scan_time TIMESTAMPTZ;
 
 ALTER TABLE attendance_records 

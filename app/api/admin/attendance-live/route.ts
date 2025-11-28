@@ -354,11 +354,17 @@ export async function POST(request: Request) {
       student_id: studentId,
     }
     
-    // Add optional fields (will fail if columns don't exist, but that's expected)
-    // User needs to run the SQL script to create these columns
-    if (scanData.rfidCard) {
-      attendanceRecord.rfid_card = scanData.rfidCard
+    // Add RFID fields - set both rfid_card and rfid_tag to avoid NOT NULL constraint errors
+    const rfidValue = scanData.rfidCard || ''
+    if (rfidValue) {
+      attendanceRecord.rfid_card = rfidValue
+      attendanceRecord.rfid_tag = rfidValue  // Some schemas use rfid_tag instead
+    } else {
+      // If no RFID provided, set empty string to avoid NOT NULL constraint
+      attendanceRecord.rfid_card = ''
+      attendanceRecord.rfid_tag = ''
     }
+    
     attendanceRecord.scan_time = currentTime
     attendanceRecord.scan_type = scanType
     attendanceRecord.time_in = timeIn
