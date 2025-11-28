@@ -44,9 +44,10 @@ export async function GET(request: Request) {
     console.log(`Checking RFID: ${rfidNormalized}`)
     
     // Try to find student by RFID
+    // Select all columns to avoid issues with missing columns
     const { data: students, error: studentError } = await supabase
       .from('students')
-      .select('student_id, student_number, rfid_card, rfidCard, rfid_tag, first_name, last_name, email, grade_level, section')
+      .select('*')
       .or(`rfid_card.eq.${rfidNormalized},rfidCard.eq.${rfidNormalized},rfid_tag.eq.${rfidNormalized},rfid_card.eq.${rfidNoLeadingZeros},rfidCard.eq.${rfidNoLeadingZeros},rfid_tag.eq.${rfidNoLeadingZeros}`)
       .limit(1)
 
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
       // Try partial match
       const { data: partialMatch } = await supabase
         .from('students')
-        .select('student_id, student_number, rfid_card, rfidCard, rfid_tag, first_name, last_name, email, grade_level, section')
+        .select('*')
         .or(`rfid_card.ilike.%${rfidNormalized}%,rfidCard.ilike.%${rfidNormalized}%,rfid_tag.ilike.%${rfidNormalized}%`)
         .limit(1)
       
@@ -84,12 +85,12 @@ export async function GET(request: Request) {
           success: true,
           assigned: true,
           student: {
-            studentId: student.student_id || student.student_number,
-            name: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
-            email: student.email,
-            gradeLevel: student.grade_level,
-            section: student.section,
-            rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag,
+            studentId: student.student_id || student.student_number || student.id || student.studentId || null,
+            name: `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() || student.name || 'Unknown',
+            email: student.email || null,
+            gradeLevel: student.grade_level || student.gradeLevel || null,
+            section: student.section || null,
+            rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag || null,
           },
           searchedRfid: rfidNormalized,
           matchType: 'partial'
@@ -122,12 +123,12 @@ export async function GET(request: Request) {
       success: true,
       assigned: true,
       student: {
-        studentId: student.student_id || student.student_number,
-        name: `${student.first_name || ''} ${student.last_name || ''}`.trim(),
-        email: student.email,
-        gradeLevel: student.grade_level,
-        section: student.section,
-        rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag,
+        studentId: student.student_id || student.student_number || student.id || student.studentId || null,
+        name: `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() || student.name || 'Unknown',
+        email: student.email || null,
+        gradeLevel: student.grade_level || student.gradeLevel || null,
+        section: student.section || null,
+        rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag || null,
       },
       searchedRfid: rfidNormalized,
       matchType: 'exact'
