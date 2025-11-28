@@ -31,15 +31,17 @@ ALTER COLUMN student_id TYPE TEXT USING student_id::TEXT;
 -- Example policies - modify as needed for your security requirements
 
 -- Allow students to read their own attendance records
+-- Note: student_id is now TEXT, so we compare as text
 CREATE POLICY "Students view own attendance" ON attendance_records
   FOR SELECT
   USING (
-    auth.uid()::text = student_id 
+    -- Compare UUID auth.uid() as text with TEXT student_id
+    auth.uid()::text = student_id::text
     OR student_id IN (
-      SELECT student_id::text FROM students WHERE id = auth.uid()
-    )
-    OR student_id IN (
-      SELECT student_number FROM students WHERE id = auth.uid()
+      -- Get student_id (TEXT) from students table where id (UUID) matches auth.uid()
+      SELECT COALESCE(student_id::text, student_number::text, id::text) 
+      FROM students 
+      WHERE id = auth.uid()
     )
   );
 
