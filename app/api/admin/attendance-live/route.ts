@@ -197,38 +197,49 @@ export async function GET(request: Request) {
       })
     }
 
-    // Fetch student information for all records
-    // student_id in attendance_records is now TEXT, so we need to handle it carefully
+    // Fetch student and teacher information for all records
     const studentIds = [...new Set((data || []).map((r: any) => r.student_id).filter(Boolean))]
     const studentMap: Record<string, any> = {}
+    const teacherMap: Record<string, any> = {}
     
     if (studentIds.length > 0) {
       try {
-        // Fetch all students and filter in memory to avoid UUID/TEXT comparison issues
+        // Fetch all students
         const { data: allStudents, error: studentsError } = await supabaseClient
           .from('students')
           .select('*')
           .limit(1000)
         
-        if (studentsError) {
-          console.error('Error fetching students:', studentsError)
-          // Continue without student info rather than failing completely
-        } else if (allStudents) {
-          // Create a map for quick lookup - check all possible ID fields
+        if (!studentsError && allStudents) {
           allStudents.forEach((student: any) => {
             const studentIdStr = (student.student_id || '').toString().trim()
             const studentNumberStr = (student.student_number || '').toString().trim()
             const studentIdUuid = (student.id || '').toString().trim()
             
-            // Map by all possible identifiers
             if (studentIdStr) studentMap[studentIdStr] = student
             if (studentNumberStr) studentMap[studentNumberStr] = student
             if (studentIdUuid) studentMap[studentIdUuid] = student
           })
         }
-      } catch (studentsFetchError: any) {
-        console.error('Error in student fetch:', studentsFetchError)
-        // Continue without student info
+        
+        // Also fetch teachers
+        const { data: allTeachers, error: teachersError } = await supabaseClient
+          .from('teachers')
+          .select('*')
+          .limit(1000)
+        
+        if (!teachersError && allTeachers) {
+          allTeachers.forEach((teacher: any) => {
+            const teacherIdStr = (teacher.teacher_id || teacher.id || '').toString().trim()
+            const teacherEmail = (teacher.email || '').toString().trim().toLowerCase()
+            
+            if (teacherIdStr) teacherMap[teacherIdStr] = teacher
+            if (teacherEmail) teacherMap[teacherEmail] = teacher
+          })
+        }
+      } catch (fetchError: any) {
+        console.error('Error fetching students/teachers:', fetchError)
+        // Continue without info
       }
     }
 
