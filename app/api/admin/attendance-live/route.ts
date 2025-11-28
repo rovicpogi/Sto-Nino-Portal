@@ -128,13 +128,23 @@ export async function GET(request: Request) {
     })
   } catch (error: any) {
     console.error('Attendance records API error:', error)
+    console.error('Error stack:', error?.stack)
     return NextResponse.json(
       {
         success: false,
         error: error?.message || 'Internal server error',
         records: [],
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      }
     )
   }
 }
@@ -473,14 +483,19 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error('Record attendance API error:', error)
+    console.error('Error stack:', error?.stack)
+    console.error('Error details:', JSON.stringify(error, null, 2))
+    
     return NextResponse.json(
       {
         success: false,
         error: error?.message || 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
       },
       { 
         status: 500,
         headers: {
+          'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
