@@ -49,9 +49,23 @@ export async function GET() {
       })
     }
 
+    // Transform data to match frontend expectations
+    const transformedStudents = (data || []).map((student: any) => ({
+      ...student,
+      // Map database fields to frontend expected fields
+      student_id: student.student_id || student.student_number,
+      name: student.name || `${student.first_name || ''} ${student.middle_name || ''} ${student.last_name || ''}`.trim() || 'N/A',
+      rfid_card: student.rfid_card || student.rfidCard || student.rfid_tag || null,
+      rfidCard: student.rfid_card || student.rfidCard || student.rfid_tag || null,
+      // Keep original fields for compatibility
+      first_name: student.first_name,
+      last_name: student.last_name,
+      middle_name: student.middle_name,
+    }))
+
     return NextResponse.json({
       success: true,
-      students: data || [],
+      students: transformedStudents,
     })
   } catch (error: any) {
     console.error('Students API error:', error)

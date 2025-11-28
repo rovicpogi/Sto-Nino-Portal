@@ -13,6 +13,9 @@ export async function POST(request: Request) {
       )
     }
 
+    // Generate email if not provided (use student ID as username)
+    const email = studentData.email || `${studentData.studentId}@sndpa.edu.ph`
+
     // Try to insert into Supabase
     // Note: You'll need to create a 'students' table in your Supabase database
     const { data, error } = await supabase
@@ -23,8 +26,12 @@ export async function POST(request: Request) {
           student_id: studentData.studentId,
           grade_level: studentData.gradeLevel,
           section: studentData.section,
-          email: studentData.email || null,
+          email: email,
           phone: studentData.phone || null,
+          password: studentData.password || null, // Store password (should be hashed in production)
+          Password: studentData.password || null, // Also store in Password field for compatibility
+          username: studentData.username || studentData.studentId,
+          first_login: studentData.firstLogin !== false, // Default to true
           status: 'enrolled',
           created_at: new Date().toISOString(),
         },

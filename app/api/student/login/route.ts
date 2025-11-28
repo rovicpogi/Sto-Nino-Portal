@@ -166,9 +166,13 @@ export async function POST(request: Request) {
       delete studentWithoutPassword.password
     }
 
+    // Check if this is first login
+    const firstLogin = student.first_login === true || student.first_login === 1 || student.firstLogin === true
+
     return NextResponse.json({
       success: true,
       student: studentWithoutPassword,
+      firstLogin: firstLogin,
     })
   } catch (error: any) {
     console.error('Student login API error:', error)

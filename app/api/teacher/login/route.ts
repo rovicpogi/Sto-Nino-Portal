@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     // Validate input
     if (!email || !password) {
       return NextResponse.json(
-        { ok: false, error: 'Email and password are required' },
+        { success: false, error: 'Email and password are required' },
         { status: 400 }
       )
     }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (error) {
       console.error('Database error:', error)
       return NextResponse.json(
-        { ok: false, error: 'Database connection error. Please try again.' },
+        { success: false, error: 'Database connection error. Please try again.' },
         { status: 500 }
       )
     }
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     if (!teacher) {
       return NextResponse.json(
-        { ok: false, error: 'Invalid email or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       )
     }
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
     if (!teacherPassword || teacherPassword !== password) {
       return NextResponse.json(
-        { ok: false, error: 'Invalid email or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       )
     }
@@ -60,14 +60,13 @@ export async function POST(request: Request) {
     if (teacherWithoutPassword.password !== undefined) delete teacherWithoutPassword.password
 
     return NextResponse.json({
-      ok: true,
-      user: teacherWithoutPassword,
-      userType: 'teacher',
+      success: true,
+      teacher: teacherWithoutPassword,
     })
   } catch (e: any) {
     console.error('Teacher login error:', e)
     return NextResponse.json(
-      { ok: false, error: e?.message ?? 'Unknown error' },
+      { success: false, error: e?.message ?? 'Unknown error' },
       { status: 500 }
     )
   }

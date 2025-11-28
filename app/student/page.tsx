@@ -4,12 +4,33 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import jsPDF from "jspdf"
+// Import jspdf-autotable as side effect to extend jsPDF
+import "jspdf-autotable"
+
+// Extend jsPDF type to include autoTable
+declare module "jspdf" {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF
+    lastAutoTable?: {
+      finalY: number
+    }
+  }
+}
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   LayoutDashboard,
   GraduationCap,
@@ -27,6 +48,7 @@ import {
   EyeOff,
   RefreshCcw,
   AlertCircle,
+  Download,
 } from "lucide-react"
 
 interface Student {
@@ -93,6 +115,12 @@ interface GradeItem {
   lastUpdated: string
 }
 
+interface SubjectTeacher {
+  id: string
+  subject: string
+  teacher: string
+}
+
 interface DashboardData {
   stats: DashboardStats
   assignments: AssignmentSummary[]
@@ -105,7 +133,11 @@ interface DashboardData {
   enrollment: {
     status: string
     academicYear: string
+    semester?: string
+    gradeLevel?: string
+    strand?: string
   }
+  subjects?: SubjectTeacher[]
 }
 
 const STORAGE_KEY = "student"
@@ -131,6 +163,205 @@ const accentStyles: Record<string, string> = {
   orange: "bg-orange-50 border-orange-200 text-orange-800",
   red: "bg-red-50 border-red-200 text-red-800",
   indigo: "bg-indigo-50 border-indigo-200 text-indigo-800",
+}
+
+// Calendar of Activities Data
+interface CalendarActivity {
+  date: string // Format: "YYYY-MM-DD"
+  title: string
+  category: "academic" | "event" | "holiday" | "test" | "workshop" | "celebration" | "other"
+}
+
+const calendarActivities: CalendarActivity[] = [
+  // June 2025
+  { date: "2025-06-16", title: "Brigada Eskwela", category: "event" },
+  { date: "2025-06-17", title: "Brigada Eskwela", category: "event" },
+  { date: "2025-06-18", title: "Brigada Eskwela", category: "event" },
+  { date: "2025-06-19", title: "Brigada Eskwela", category: "event" },
+  { date: "2025-06-20", title: "Brigada Eskwela", category: "event" },
+  { date: "2025-06-23", title: "SNDPALPH Workshop and Seminar", category: "workshop" },
+  { date: "2025-06-24", title: "SNDPALPH Workshop and Seminar", category: "workshop" },
+  { date: "2025-06-25", title: "SNDPALPH Workshop and Seminar", category: "workshop" },
+  { date: "2025-06-26", title: "Parents Orientation of Student Manual", category: "event" },
+  { date: "2025-06-27", title: "TEAM BUILDING", category: "event" },
+  { date: "2025-06-30", title: "Grade 11 (SHS) Orientation", category: "event" },
+  
+  // July 2025
+  { date: "2025-07-01", title: "Junior High School and Grade 12 (SHS) Orientation", category: "event" },
+  { date: "2025-07-02", title: "Elementary, Junior HS and Grade 11 Orientation", category: "event" },
+  { date: "2025-07-03", title: "Kinder to Junior HS and Grade 12 Orientation", category: "event" },
+  { date: "2025-07-04", title: "Start of Regular Classes", category: "academic" },
+  { date: "2025-07-07", title: "ID Picture Taking", category: "event" },
+  { date: "2025-07-08", title: "ID Picture Taking", category: "event" },
+  { date: "2025-07-09", title: "ID Picture Taking", category: "event" },
+  { date: "2025-07-10", title: "ID Picture Taking", category: "event" },
+  { date: "2025-07-11", title: "ID Picture Taking", category: "event" },
+  { date: "2025-07-12", title: "Training for Campus Journalism", category: "workshop" },
+  { date: "2025-07-14", title: "Dental Check-Up", category: "event" },
+  { date: "2025-07-15", title: "Dental Check-Up", category: "event" },
+  { date: "2025-07-16", title: "Dental Check-Up", category: "event" },
+  { date: "2025-07-17", title: "Dental Check-Up", category: "event" },
+  { date: "2025-07-18", title: "Dental Check-Up", category: "event" },
+  { date: "2025-07-21", title: "Worksheet No. 1", category: "academic" },
+  { date: "2025-07-22", title: "Worksheet No. 1", category: "academic" },
+  { date: "2025-07-23", title: "Worksheet No. 1", category: "academic" },
+  { date: "2025-07-24", title: "Worksheet No. 1", category: "academic" },
+  { date: "2025-07-25", title: "Worksheet No. 1", category: "academic" },
+  
+  // August 2025
+  { date: "2025-08-04", title: "FIRST QUARTER TEST - PART I", category: "test" },
+  { date: "2025-08-05", title: "FIRST QUARTER TEST - PART I", category: "test" },
+  { date: "2025-08-06", title: "FIRST QUARTER TEST - PART I", category: "test" },
+  { date: "2025-08-07", title: "FIRST QUARTER TEST - PART I", category: "test" },
+  { date: "2025-08-08", title: "FIRST QUARTER TEST - PART I", category: "test" },
+  { date: "2025-08-12", title: "Elimination for Tagisan ng Talino", category: "event" },
+  { date: "2025-08-13", title: "Elimination for Tagisan ng Talino", category: "event" },
+  { date: "2025-08-16", title: "Orientation for SHS Work Immersion", category: "event" },
+  { date: "2025-08-18", title: "Interprivate 2025", category: "event" },
+  { date: "2025-08-19", title: "Interprivate 2025", category: "event" },
+  { date: "2025-08-20", title: "PEAC SEMINAR", category: "workshop" },
+  { date: "2025-08-22", title: "CPAPS Campus Journalism (Elem)", category: "event" },
+  { date: "2025-08-23", title: "Final Round for Tagisan ng Talino", category: "event" },
+  { date: "2025-08-25", title: "PEAC INSET (JHS)", category: "workshop" },
+  { date: "2025-08-26", title: "CPAPS Campus Journalism (JHS/SHS)", category: "event" },
+  { date: "2025-08-28", title: "Buwan ng Wika Celebration for Junior and Senior High", category: "celebration" },
+  { date: "2025-08-29", title: "Buwan ng Wika Celebration for Kinder and Elementary", category: "celebration" },
+  
+  // September 2025
+  { date: "2025-09-01", title: "FIRST QUARTER TEST - PART II", category: "test" },
+  { date: "2025-09-02", title: "FIRST QUARTER TEST - PART II", category: "test" },
+  { date: "2025-09-03", title: "FIRST QUARTER TEST - PART II", category: "test" },
+  { date: "2025-09-04", title: "FIRST QUARTER TEST - PART II", category: "test" },
+  { date: "2025-09-05", title: "FIRST QUARTER TEST - PART II", category: "test" },
+  { date: "2025-09-06", title: "City Meet", category: "event" },
+  { date: "2025-09-08", title: "City Meet", category: "event" },
+  { date: "2025-09-09", title: "City Meet", category: "event" },
+  { date: "2025-09-10", title: "DR. GALICIA'S DAY", category: "celebration" },
+  { date: "2025-09-11", title: "Initial Interview for SGO Party-list", category: "event" },
+  { date: "2025-09-12", title: "Initial Interview for SGO Party-list", category: "event" },
+  { date: "2025-09-13", title: "Initial Interview for SGO Party-list", category: "event" },
+  { date: "2025-09-15", title: "Campaign Period for SGO", category: "event" },
+  { date: "2025-09-16", title: "Campaign Period for SGO", category: "event" },
+  { date: "2025-09-17", title: "Campaign Period for SGO", category: "event" },
+  { date: "2025-09-20", title: "Career Orientation for Grade 12", category: "event" },
+  { date: "2025-09-22", title: "Submission of 2nd Quarter Test - Part I", category: "academic" },
+  { date: "2025-09-23", title: "Submission of 2nd Quarter Test - Part I", category: "academic" },
+  { date: "2025-09-24", title: "FIRST PARENTS TEACHERS CONFERENCE", category: "event" },
+  { date: "2025-09-25", title: "Class Pictorial", category: "event" },
+  { date: "2025-09-26", title: "School Festival of Talent (SFOT) - Elementary", category: "celebration" },
+  { date: "2025-09-27", title: "School Festival of Talent (SFOT) - High School", category: "celebration" },
+  { date: "2025-09-29", title: "SECOND QUARTER TEST - PART I", category: "test" },
+  { date: "2025-09-30", title: "SECOND QUARTER TEST - PART I", category: "test" },
+  
+  // October 2025
+  { date: "2025-10-01", title: "SECOND QUARTER TEST - PART I", category: "test" },
+  { date: "2025-10-02", title: "SECOND QUARTER TEST - PART I", category: "test" },
+  { date: "2025-10-03", title: "SECOND QUARTER TEST - PART I", category: "test" },
+  { date: "2025-10-10", title: "SNDPALPH TEACHER'S DAY CELEBRATION", category: "celebration" },
+  { date: "2025-10-15", title: "Investiture Practice", category: "event" },
+  { date: "2025-10-16", title: "Investiture Practice", category: "event" },
+  { date: "2025-10-17", title: "CPAPS DFOK (JHS/SHS)", category: "event" },
+  { date: "2025-10-18", title: "Investiture", category: "event" },
+  { date: "2025-10-21", title: "Kinder Leadership Training", category: "workshop" },
+  { date: "2025-10-22", title: "Star and Kab Scout", category: "event" },
+  { date: "2025-10-23", title: "Girl and Boy Scout", category: "event" },
+  { date: "2025-10-24", title: "JHS and SHS Leadership Training", category: "workshop" },
+  
+  // November 2025
+  { date: "2025-11-03", title: "Resume of Classes", category: "academic" },
+  { date: "2025-11-07", title: "Reading Evaluation", category: "test" },
+  { date: "2025-11-10", title: "SECOND QUARTER TEST - PART II", category: "test" },
+  { date: "2025-11-11", title: "SECOND QUARTER TEST - PART II", category: "test" },
+  { date: "2025-11-12", title: "CPAPS JHS DEOK 2025", category: "event" },
+  { date: "2025-11-13", title: "SECOND QUARTER TEST - PART II", category: "test" },
+  { date: "2025-11-14", title: "SECOND QUARTER TEST - PART II", category: "test" },
+  { date: "2025-11-17", title: "Elimination for Science Quiz Bee", category: "event" },
+  { date: "2025-11-25", title: "SNDPA-LPH EDUCATIONAL TOUR", category: "event" },
+  { date: "2025-11-28", title: "SECOND PARENTS TEACHERS CONFERENCE", category: "event" },
+  { date: "2025-11-29", title: "Final Round for Science Quiz Bee", category: "event" },
+  
+  // December 2025
+  { date: "2025-12-08", title: "THIRD QUARTER TEST - PART I", category: "test" },
+  { date: "2025-12-09", title: "THIRD QUARTER TEST - PART I", category: "test" },
+  { date: "2025-12-10", title: "THIRD QUARTER TEST - PART I", category: "test" },
+  { date: "2025-12-11", title: "THIRD QUARTER TEST - PART I", category: "test" },
+  { date: "2025-12-12", title: "THIRD QUARTER TEST - PART I", category: "test" },
+  { date: "2025-12-13", title: "PARENTS TEACHERS GRATITUDE NIGHT", category: "event" },
+  { date: "2025-12-18", title: "CHRISTMAS CONCERT", category: "celebration" },
+  { date: "2025-12-19", title: "PRAGANIANS CHRISTMAS PARTY", category: "celebration" },
+  { date: "2025-12-20", title: "FACULTY AND STAFF CHRISTMAS PARTY", category: "celebration" },
+  { date: "2025-12-22", title: "START OF CHRISTMAS BREAK", category: "holiday" },
+  
+  // January 2026
+  { date: "2026-01-05", title: "RESUMPTION OF CLASSES", category: "academic" },
+  { date: "2026-01-06", title: "Elimination for Spelling Bee", category: "event" },
+  { date: "2026-01-10", title: "Final Round for Spelling Bee", category: "event" },
+  { date: "2026-01-12", title: "Elimination for Spelling Bee", category: "event" },
+  { date: "2026-01-16", title: "CPAPS I-Spell", category: "event" },
+  { date: "2026-01-17", title: "Final Round for Spelling Bee", category: "event" },
+  { date: "2026-01-19", title: "Graduation Pictorial", category: "event" },
+  { date: "2026-01-20", title: "Graduation Pictorial", category: "event" },
+  { date: "2026-01-21", title: "Graduation Pictorial", category: "event" },
+  { date: "2026-01-22", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-23", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-24", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-25", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-26", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-27", title: "THIRD QUARTER TEST - PART II", category: "test" },
+  { date: "2026-01-29", title: "SNDPA-LPH 28th Founding Anniversary (Opening)", category: "celebration" },
+  { date: "2026-01-30", title: "INTERCOLOR (Grades 1 to 3)", category: "event" },
+  { date: "2026-01-31", title: "INTERCOLOR (Grades 4 to 6)", category: "event" },
+  
+  // February 2026
+  { date: "2026-02-02", title: "INTERCOLOR (JHS and SHS)", category: "event" },
+  { date: "2026-02-03", title: "INTERCOLOR (JHS and SHS)", category: "event" },
+  { date: "2026-02-04", title: "PRE-SCHOOLYMPICS", category: "event" },
+  { date: "2026-02-05", title: "SNDPA-LPH 28th Founding Anniversary (Closing)", category: "celebration" },
+  { date: "2026-02-13", title: "DISTRIBUTION OF REPORT CARDS", category: "academic" },
+  { date: "2026-02-16", title: "Elimination for Math Wizard", category: "event" },
+  { date: "2026-02-20", title: "JUNIOR AND SENIOR PROM", category: "celebration" },
+  { date: "2026-02-28", title: "Final Round for Math Wizard", category: "event" },
+  
+  // March 2026
+  { date: "2026-03-09", title: "CUMULATIVE TEST", category: "test" },
+  { date: "2026-03-10", title: "CUMULATIVE TEST", category: "test" },
+  { date: "2026-03-11", title: "CUMULATIVE TEST", category: "test" },
+  { date: "2026-03-12", title: "CUMULATIVE TEST", category: "test" },
+  { date: "2026-03-13", title: "CUMULATIVE TEST", category: "test" },
+  { date: "2026-03-14", title: "WATER FUN AND FAREWELL PARTY FOR KINDER", category: "celebration" },
+  { date: "2026-03-16", title: "CLEARANCE WEEK", category: "academic" },
+  { date: "2026-03-17", title: "FAREWELL PARTY", category: "celebration" },
+  { date: "2026-03-18", title: "Recognition Practice", category: "event" },
+  { date: "2026-03-19", title: "Graduation Practice", category: "event" },
+  { date: "2026-03-20", title: "Recognition Practice", category: "event" },
+  { date: "2026-03-23", title: "Graduation Practice", category: "event" },
+  { date: "2026-03-25", title: "DELIBERATION OF HONOR", category: "academic" },
+  { date: "2026-03-26", title: "General Practice for Recognition", category: "event" },
+  { date: "2026-03-27", title: "General Practice for Graduation", category: "event" },
+  { date: "2026-03-29", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-03-30", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-03-31", title: "HOLY WEEK", category: "holiday" },
+  
+  // April 2026
+  { date: "2026-04-01", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-04-02", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-04-03", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-04-04", title: "HOLY WEEK", category: "holiday" },
+  { date: "2026-04-06", title: "Graduation Mass Practice", category: "event" },
+  { date: "2026-04-07", title: "GRADUATION MASS", category: "celebration" },
+  { date: "2026-04-09", title: "RECOGNITION DAY", category: "celebration" },
+  { date: "2026-04-10", title: "GRADUATION DAY", category: "celebration" },
+]
+
+// Color mapping for activity categories
+const categoryColors: Record<string, string> = {
+  academic: "bg-blue-200/50", // Semi-transparent blue
+  event: "bg-green-200/50", // Semi-transparent green
+  holiday: "bg-purple-200/50", // Semi-transparent purple
+  test: "bg-red-200/50", // Semi-transparent red
+  workshop: "bg-yellow-200/50", // Semi-transparent yellow
+  celebration: "bg-pink-200/50", // Semi-transparent pink
+  other: "bg-gray-200/50", // Semi-transparent gray
 }
 
 const formatDate = (isoDate: string) => {
@@ -166,6 +397,20 @@ export default function StudentDashboard() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
   const [activeNav, setActiveNav] = useState<NavItem>(DEFAULT_VIEW)
+  const [showFirstLoginModal, setShowFirstLoginModal] = useState(false)
+  const [firstLoginForm, setFirstLoginForm] = useState({
+    newPassword: "",
+    confirmPassword: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    address: "",
+    phone: "",
+    birthDate: "",
+    gender: "",
+  })
+  const [firstLoginError, setFirstLoginError] = useState<string | null>(null)
+  const [isSavingFirstLogin, setIsSavingFirstLogin] = useState(false)
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
@@ -339,6 +584,23 @@ export default function StudentDashboard() {
         setEmailTouched(false)
         setPasswordTouched(false)
         setLoginError(null)
+        
+        // Check if first login
+        if (data.firstLogin) {
+          setShowFirstLoginModal(true)
+          // Pre-fill form with existing data if available
+          setFirstLoginForm({
+            newPassword: "",
+            confirmPassword: "",
+            firstName: data.student.first_name || "",
+            middleName: data.student.middle_name || "",
+            lastName: data.student.last_name || "",
+            address: data.student.address || "",
+            phone: data.student.phone || "",
+            birthDate: data.student.birth_date || "",
+            gender: data.student.gender || "",
+          })
+        }
       } else {
         setLoginError(data.error || "Login failed. Please check your credentials.")
       }
@@ -354,6 +616,77 @@ export default function StudentDashboard() {
       }
     } finally {
       setIsLoggingIn(false)
+    }
+  }
+
+  const handleFirstLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFirstLoginError(null)
+
+    // Validation
+    if (!firstLoginForm.newPassword || firstLoginForm.newPassword.length < 6) {
+      setFirstLoginError("Password must be at least 6 characters long.")
+      return
+    }
+
+    if (firstLoginForm.newPassword !== firstLoginForm.confirmPassword) {
+      setFirstLoginError("Passwords do not match.")
+      return
+    }
+
+    if (!firstLoginForm.firstName || !firstLoginForm.lastName) {
+      setFirstLoginError("First name and last name are required.")
+      return
+    }
+
+    setIsSavingFirstLogin(true)
+
+    try {
+      const response = await fetch("/api/student/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: student?.id,
+          password: firstLoginForm.newPassword,
+          first_name: firstLoginForm.firstName,
+          middle_name: firstLoginForm.middleName,
+          last_name: firstLoginForm.lastName,
+          address: firstLoginForm.address,
+          phone: firstLoginForm.phone,
+          birth_date: firstLoginForm.birthDate,
+          gender: firstLoginForm.gender,
+          firstLogin: false, // Mark as completed
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Update student in state
+        const updatedStudent = { ...student, ...data.student, first_login: false }
+        setStudent(updatedStudent)
+        persistStudentSession(updatedStudent, rememberMe)
+        setShowFirstLoginModal(false)
+        setFirstLoginForm({
+          newPassword: "",
+          confirmPassword: "",
+          firstName: "",
+          middleName: "",
+          lastName: "",
+          address: "",
+          phone: "",
+          birthDate: "",
+          gender: "",
+        })
+        alert("Profile updated successfully! Welcome to the student portal.")
+      } else {
+        setFirstLoginError(data.error || "Failed to update profile. Please try again.")
+      }
+    } catch (error: any) {
+      console.error("First login error:", error)
+      setFirstLoginError("An error occurred. Please try again.")
+    } finally {
+      setIsSavingFirstLogin(false)
     }
   }
 
@@ -400,6 +733,548 @@ export default function StudentDashboard() {
   const upcomingEvents = dashboardData?.schedule?.events ?? []
   const gradeItems = dashboardData?.grades ?? []
   const enrollmentInfo = dashboardData?.enrollment
+  const subjects = dashboardData?.subjects ?? []
+
+  // Calendar state
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+
+  // Get activities for a specific date
+  const getActivitiesForDate = (date: Date): CalendarActivity[] => {
+    const dateStr = date.toISOString().split("T")[0]
+    return calendarActivities.filter((activity) => activity.date === dateStr)
+  }
+
+  // Generate calendar days for current month
+  const generateCalendarDays = () => {
+    const firstDay = new Date(currentYear, currentMonth, 1)
+    const lastDay = new Date(currentYear, currentMonth + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDayOfWeek = firstDay.getDay()
+
+    const days: (Date | null)[] = []
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null)
+    }
+
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(currentYear, currentMonth, day))
+    }
+
+    return days
+  }
+
+  const calendarDays = generateCalendarDays()
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    if (direction === "prev") {
+      if (currentMonth === 0) {
+        setCurrentMonth(11)
+        setCurrentYear(currentYear - 1)
+      } else {
+        setCurrentMonth(currentMonth - 1)
+      }
+    } else {
+      if (currentMonth === 11) {
+        setCurrentMonth(0)
+        setCurrentYear(currentYear + 1)
+      } else {
+        setCurrentMonth(currentMonth + 1)
+      }
+    }
+  }
+
+  const generateGradesPDF = useCallback(async () => {
+    if (!student) {
+      alert("Please log in to download your certificate.")
+      return
+    }
+
+    if (gradeItems.length === 0) {
+      alert("No grades available to download.")
+      return
+    }
+
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      })
+
+      // Load logo image - try multiple methods
+      const loadLogo = async (): Promise<string> => {
+        // Method 1: Try fetching as blob and converting
+        try {
+          const response = await fetch("/logo.png", { cache: "force-cache" })
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+          const blob = await response.blob()
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              const dataURL = reader.result as string
+              if (dataURL && dataURL.startsWith("data:image")) {
+                resolve(dataURL)
+              } else {
+                reject(new Error("Invalid data URL from blob"))
+              }
+            }
+            reader.onerror = () => reject(new Error("FileReader error"))
+            reader.readAsDataURL(blob)
+          })
+        } catch (fetchError) {
+          console.warn("Fetch method failed, trying Image method:", fetchError)
+          
+          // Method 2: Fallback to Image element method
+          // Use HTMLImageElement or window.Image to avoid conflict with Next.js Image component
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("Logo load timeout"))
+            }, 10000)
+
+            const logoImg = new window.Image() as HTMLImageElement
+            logoImg.crossOrigin = "anonymous"
+            
+            logoImg.onload = () => {
+              clearTimeout(timeout)
+              try {
+                const canvas = document.createElement("canvas")
+                canvas.width = logoImg.naturalWidth || logoImg.width || 200
+                canvas.height = logoImg.naturalHeight || logoImg.height || 200
+                const ctx = canvas.getContext("2d")
+                if (ctx) {
+                  ctx.drawImage(logoImg, 0, 0)
+                  const dataURL = canvas.toDataURL("image/png")
+                  if (dataURL && dataURL !== "data:," && dataURL.startsWith("data:image")) {
+                    resolve(dataURL)
+                  } else {
+                    reject(new Error("Failed to convert logo to data URL"))
+                  }
+                } else {
+                  reject(new Error("Could not get canvas context"))
+                }
+              } catch (error) {
+                reject(error)
+              }
+            }
+            
+            logoImg.onerror = (error) => {
+              clearTimeout(timeout)
+              console.error("Logo load error:", error, "Source:", logoImg.src)
+              reject(new Error(`Failed to load logo from ${logoImg.src}`))
+            }
+            
+            // Try absolute URL if relative doesn't work
+            const baseUrl = window.location.origin
+            logoImg.src = `${baseUrl}/logo.png`
+          })
+        }
+      }
+
+      // Load and add logo to PDF
+      try {
+        const logoDataUrl = await loadLogo()
+        console.log("Logo loaded successfully, data URL length:", logoDataUrl?.length)
+        
+        if (logoDataUrl && logoDataUrl.startsWith("data:image")) {
+          // Create an image element to get dimensions
+          // Use window.Image to avoid conflict with Next.js Image component
+          const img = new window.Image() as HTMLImageElement
+          img.src = logoDataUrl
+          
+          // Wait for image to load to get proper dimensions
+          await new Promise<void>((resolve, reject) => {
+            if (img.complete && img.naturalWidth > 0) {
+              // Image already loaded
+              resolve()
+            } else {
+              img.onload = () => resolve()
+              img.onerror = () => reject(new Error("Failed to load image from data URL"))
+              // Timeout after 3 seconds
+              setTimeout(() => reject(new Error("Image load timeout")), 3000)
+            }
+          })
+          
+          // Calculate aspect ratio to maintain proportions
+          const aspectRatio = img.naturalWidth / img.naturalHeight
+          const logoWidth = 30 // 30mm width (increased from 20mm)
+          const logoHeight = logoWidth / aspectRatio
+          
+          // Add logo in upper left corner (10mm from left, 10mm from top)
+          doc.addImage(logoDataUrl, "PNG", 10, 10, logoWidth, logoHeight)
+          console.log(`Logo added to PDF at (10, 10) with size ${logoWidth}x${logoHeight}mm`)
+        } else {
+          throw new Error("Invalid logo data URL format")
+        }
+      } catch (logoError) {
+        console.error("Logo failed to load or add to PDF:", logoError)
+        // Continue without logo - don't block PDF generation
+        // The PDF will be generated without the logo
+      }
+
+      // School information - centered
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("STO. NIÑO DE PRAGA ACADEMY", 105, 18, { align: "center" })
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "normal")
+      doc.text("OF LA PAZ HOMES II, INC.", 105, 24, { align: "center" })
+      doc.text("La Paz Homes II/Karlaville Parkhomes, Trece", 105, 28, { align: "center" })
+
+      // Certificate title
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.text("CERTIFICATE OF GRADES", 105, 45, { align: "center" })
+
+      // Student information
+      const studentName = `${student.first_name || ""} ${student.middle_name || ""} ${student.last_name || ""}`.trim() || student.name || "N/A"
+      const gradeLevel = student.grade_level || enrollmentInfo?.gradeLevel || "N/A"
+      const academicYear = enrollmentInfo?.academicYear || "2024-2025"
+      const semester = enrollmentInfo?.semester || "SECOND SEMESTER"
+
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "normal")
+      doc.text(`This is to certify that ${studentName.toUpperCase()} of Grade ${gradeLevel}`, 105, 60, { align: "center" })
+      doc.text(`for the ${semester} of ACADEMIC YEAR ${academicYear}.`, 105, 66, { align: "center" })
+
+      // Grades table
+      const tableData = gradeItems.map((grade) => {
+        const gradeValue = grade.grade || "0"
+        const numericGrade = parseFloat(gradeValue)
+        return [
+          grade.subject || "N/A",
+          gradeValue,
+          !isNaN(numericGrade) && numericGrade >= 75 ? "PASSED" : "FAILED",
+        ]
+      })
+
+      // Calculate general average
+      const numericGrades = gradeItems
+        .map((g) => {
+          const gradeValue = g.grade || "0"
+          return parseFloat(gradeValue)
+        })
+        .filter((g) => !isNaN(g))
+      
+      const generalAverage = numericGrades.length > 0
+        ? (numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length).toFixed(0)
+        : "N/A"
+      const actionTaken = generalAverage !== "N/A" && parseFloat(generalAverage) >= 75 ? "PROMOTED" : "RETAINED"
+
+      // Add general average row
+      tableData.push(["General Average for the semester", generalAverage, actionTaken])
+
+      // Create table using autoTable
+      // @ts-ignore - autoTable extends jsPDF
+      if (typeof (doc as any).autoTable === 'function') {
+        // @ts-ignore - autoTable extends jsPDF
+        (doc as any).autoTable({
+          startY: 80,
+          head: [["SUBJECT", "SEM FINAL GRADE", "ACTION TAKEN"]],
+          body: tableData,
+          theme: "grid",
+          headStyles: {
+            fillColor: [220, 220, 220],
+            textColor: [0, 0, 0],
+            fontStyle: "bold",
+            fontSize: 10,
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [0, 0, 0],
+          },
+          columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 40, halign: "center" },
+            2: { cellWidth: 50, halign: "center" },
+          },
+          margin: { left: 10, right: 10 },
+        })
+      } else {
+        // Fallback: create table manually if autoTable is not available
+        console.warn("autoTable not available, using manual table")
+        let yPos = 80
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.text("SUBJECT", 10, yPos)
+        doc.text("SEM FINAL GRADE", 110, yPos)
+        doc.text("ACTION TAKEN", 150, yPos)
+        
+        yPos += 10
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9)
+        tableData.forEach((row) => {
+          if (yPos > 250) {
+            doc.addPage()
+            yPos = 20
+          }
+          const subject = String(row[0]).substring(0, 50) // Truncate long subjects
+          doc.text(subject, 10, yPos)
+          doc.text(String(row[1]), 110, yPos, { align: "center" })
+          doc.text(String(row[2]), 150, yPos, { align: "center" })
+          yPos += 8
+        })
+      }
+
+      // Certification text
+      let finalY = 200 // Default position if autoTable didn't work
+      if (doc.lastAutoTable && doc.lastAutoTable.finalY) {
+        finalY = doc.lastAutoTable.finalY + 15
+      }
+      
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "italic")
+      doc.text("This certification is issued upon the request of the aforementioned student", 105, finalY, { align: "center" })
+      doc.text("for EDUCATIONAL ASSISTANCE and for the stated purpose only.", 105, finalY + 6, { align: "center" })
+
+      // Date and location
+      const currentDate = new Date()
+      const dateStr = currentDate.toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+      doc.setFont("helvetica", "normal")
+      doc.text(`Issued this ${dateStr} at SNDPA-LPH, Trece Martires City, Cavite.`, 105, finalY + 15, { align: "center" })
+
+      // Signatures section
+      const signatureY = finalY + 35
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "normal")
+      
+      // Left signature
+      doc.text("MRS. CORAZON R. ULEP", 50, signatureY)
+      doc.text("School Registrar", 50, signatureY + 5)
+
+      // Right signature - fixed to match the image
+      doc.text("COL GILMAR N GALICIA PA(Res) ME", 150, signatureY)
+      doc.text("Principal / Administrator", 150, signatureY + 5)
+
+      // Footer note
+      const footerY = 270
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "italic")
+      doc.text("Should there be a need to verify this document? Please call (046) 443-33-67 Office of the Registrar", 105, footerY, { align: "center" })
+      doc.text("NOT VALID WITHOUT SCHOOL SEAL", 105, footerY + 5, { align: "center" })
+
+      // Save PDF
+      const fileName = `Certificate_of_Grades_${studentName.replace(/\s+/g, "_")}_${academicYear}.pdf`
+      doc.save(fileName)
+    } catch (error: any) {
+      console.error("Error generating PDF:", error)
+      console.error("Error details:", {
+        message: error?.message,
+        stack: error?.stack,
+        student: !!student,
+        gradeItemsCount: gradeItems.length,
+      })
+      alert(`Failed to generate PDF: ${error?.message || "Unknown error"}. Please check the console for details.`)
+    }
+  }, [student, gradeItems, enrollmentInfo])
+
+  const generateCertificationPDF = useCallback(async () => {
+    if (!student) {
+      alert("Please log in to download your certification.")
+      return
+    }
+
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      })
+
+      // Load logo image
+      const loadLogo = async (): Promise<string> => {
+        try {
+          const response = await fetch("/logo.png", { cache: "force-cache" })
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+          const blob = await response.blob()
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+              const dataURL = reader.result as string
+              if (dataURL && dataURL.startsWith("data:image")) {
+                resolve(dataURL)
+              } else {
+                reject(new Error("Invalid data URL from blob"))
+              }
+            }
+            reader.onerror = () => reject(new Error("FileReader error"))
+            reader.readAsDataURL(blob)
+          })
+        } catch (fetchError) {
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("Logo load timeout"))
+            }, 10000)
+
+            const logoImg = new window.Image() as HTMLImageElement
+            logoImg.crossOrigin = "anonymous"
+            logoImg.onload = () => {
+              clearTimeout(timeout)
+              try {
+                const canvas = document.createElement("canvas")
+                canvas.width = logoImg.naturalWidth || logoImg.width || 200
+                canvas.height = logoImg.naturalHeight || logoImg.height || 200
+                const ctx = canvas.getContext("2d")
+                if (ctx) {
+                  ctx.drawImage(logoImg, 0, 0)
+                  const dataURL = canvas.toDataURL("image/png")
+                  if (dataURL && dataURL.startsWith("data:image")) {
+                    resolve(dataURL)
+                  } else {
+                    reject(new Error("Failed to convert logo to data URL"))
+                  }
+                } else {
+                  reject(new Error("Could not get canvas context"))
+                }
+              } catch (error) {
+                reject(error)
+              }
+            }
+            logoImg.onerror = () => {
+              clearTimeout(timeout)
+              reject(new Error(`Failed to load logo from ${logoImg.src}`))
+            }
+            const baseUrl = window.location.origin
+            logoImg.src = `${baseUrl}/logo.png`
+            if (logoImg.complete && logoImg.naturalWidth > 0) {
+              logoImg.onload(new Event('load') as any)
+            }
+          })
+        }
+      }
+
+      // Load and add logo
+      let logoHeight = 0
+      try {
+        const logoDataUrl = await loadLogo()
+        const img = new window.Image() as HTMLImageElement
+        img.src = logoDataUrl
+        await new Promise<void>((resolve, reject) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve()
+          } else {
+            img.onload = () => resolve()
+            img.onerror = () => reject(new Error("Failed to load image from data URL"))
+            setTimeout(() => reject(new Error("Image load timeout")), 3000)
+          }
+        })
+        const aspectRatio = img.naturalWidth / img.naturalHeight
+        const logoWidth = 30
+        logoHeight = logoWidth / aspectRatio
+        doc.addImage(logoDataUrl, "PNG", 10, 10, logoWidth, logoHeight)
+      } catch (logoError) {
+        console.warn("Logo failed to load, continuing without logo:", logoError)
+      }
+
+      // Motto to the right of logo, date on the same line aligned right
+      const currentDate = new Date()
+      const dateStr = currentDate.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+      
+      // Motto positioned to the right of logo (around x=50)
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "italic")
+      doc.text("The Home of Multi-Talented Children and Dedicated Teachers", 50, 20)
+      
+      // Date on the same line, aligned to the right
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "normal")
+      doc.text(dateStr, 190, 20, { align: "right" })
+
+      // CERTIFICATION title
+      doc.setFontSize(18)
+      doc.setFont("helvetica", "bold")
+      doc.text("CERTIFICATION", 105, 45, { align: "center" })
+
+      // Student information
+      const studentName = `${student.first_name || ""} ${student.middle_name || ""} ${student.last_name || ""}`.trim() || student.name || "N/A"
+      const gradeLevel = student.grade_level || enrollmentInfo?.gradeLevel || "N/A"
+      const strand = enrollmentInfo?.strand || ""
+      const academicYear = enrollmentInfo?.academicYear || "2025-2026"
+
+      // Body paragraph 1 - Use splitTextToSize to handle wrapping
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "normal")
+      let yPos = 55
+      const paragraph1 = `This is to certify that ${studentName.toUpperCase()} officially enrolled in this institution as Grade ${gradeLevel}${strand ? ` under ${strand}` : ""} for Academic Year ${academicYear}.`
+      
+      // Split text to fit within margins (left margin 20mm, right margin 20mm = 170mm width)
+      const splitText1 = doc.splitTextToSize(paragraph1, 170)
+      doc.text(splitText1, 20, yPos)
+      yPos += splitText1.length * 7 // Adjust based on line height
+
+      // Body paragraph 2 - Purpose
+      yPos = yPos + 10
+      const purposeText = "This certification is issued upon the request of the aforementioned student for Entrance Examination Slated for Cavite State University - Main Campus. This certification is issued for the stated purpose only."
+      const splitPurpose = doc.splitTextToSize(purposeText, 170)
+      doc.text(splitPurpose, 20, yPos)
+      yPos += splitPurpose.length * 7
+
+      // Issuance details
+      yPos = yPos + 10
+      const day = currentDate.getDate()
+      const month = currentDate.toLocaleDateString("en-US", { month: "long" })
+      const year = currentDate.getFullYear()
+      const dayOrdinal = (day: number) => {
+        if (day > 3 && day < 21) return `${day}th`
+        switch (day % 10) {
+          case 1: return `${day}st`
+          case 2: return `${day}nd`
+          case 3: return `${day}rd`
+          default: return `${day}th`
+        }
+      }
+      const issueText = `Issued this ${dayOrdinal(day)} day of ${month} ${year} at SNDPA-LPH, Trece Martires City, Cavite.`
+      const splitIssue = doc.splitTextToSize(issueText, 170)
+      doc.text(splitIssue, 20, yPos)
+
+      // Signatory - far right
+      const signatureY = yPos + 20
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.text("COL GILMAR N GALICIA PA (Res) MBA,MPM", 190, signatureY, { align: "right" })
+      doc.setFont("helvetica", "normal")
+      doc.text("Principal / Administrator", 190, signatureY + 5, { align: "right" })
+
+      // Note
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.text("Note: Should there be a need to verify this document?", 20, 150)
+      doc.text("Please call (046) 443-33-67 Office of the Principal", 20, 155)
+
+      // Footer disclaimer
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.text("NOT VALID", 20, 270)
+      doc.text("WITHOUT", 20, 275)
+      doc.text("SCHOOL SEAL", 20, 280)
+
+      // Save PDF
+      const fileName = `Certification_${studentName.replace(/\s+/g, "_")}_${academicYear}.pdf`
+      doc.save(fileName)
+    } catch (error: any) {
+      console.error("Error generating certification PDF:", error)
+      alert(`Failed to generate certification: ${error?.message || "Unknown error"}. Please check the console for details.`)
+    }
+  }, [student, enrollmentInfo])
 
   const statCards = [
     {
@@ -558,6 +1433,148 @@ export default function StudentDashboard() {
             </form>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
+
+  // First Login Modal
+  if (showFirstLoginModal && student) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Dialog open={showFirstLoginModal} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-red-800 text-2xl">Welcome! Complete Your Profile</DialogTitle>
+              <DialogDescription>
+                Please change your password and complete your profile information to continue.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleFirstLoginSubmit} className="space-y-4 mt-4">
+              {/* Password Section */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-blue-900 mb-3">Change Password *</h3>
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="newPassword">New Password *</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={firstLoginForm.newPassword}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, newPassword: e.target.value })}
+                      required
+                      minLength={6}
+                      placeholder="At least 6 characters"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={firstLoginForm.confirmPassword}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, confirmPassword: e.target.value })}
+                      required
+                      minLength={6}
+                      placeholder="Re-enter your password"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Personal Information Section */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold text-gray-900 mb-3">Personal Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="firstName">First Name *</Label>
+                    <Input
+                      id="firstName"
+                      value={firstLoginForm.firstName}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, firstName: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="middleName">Middle Name</Label>
+                    <Input
+                      id="middleName"
+                      value={firstLoginForm.middleName}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, middleName: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Input
+                      id="lastName"
+                      value={firstLoginForm.lastName}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, lastName: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="gender">Gender</Label>
+                    <Select
+                      value={firstLoginForm.gender}
+                      onValueChange={(value) => setFirstLoginForm({ ...firstLoginForm, gender: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="birthDate">Birth Date</Label>
+                    <Input
+                      id="birthDate"
+                      type="date"
+                      value={firstLoginForm.birthDate}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, birthDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={firstLoginForm.phone}
+                      onChange={(e) => setFirstLoginForm({ ...firstLoginForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Label htmlFor="address">Address</Label>
+                  <Input
+                    id="address"
+                    value={firstLoginForm.address}
+                    onChange={(e) => setFirstLoginForm({ ...firstLoginForm, address: e.target.value })}
+                    placeholder="Street, City, Province"
+                  />
+                </div>
+              </div>
+
+              {firstLoginError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded text-sm">
+                  {firstLoginError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  type="submit"
+                  disabled={isSavingFirstLogin}
+                  className="bg-red-800 hover:bg-red-700"
+                >
+                  {isSavingFirstLogin ? "Saving..." : "Save & Continue"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
@@ -800,11 +1817,21 @@ export default function StudentDashboard() {
 
           {activeNav === "enrollment" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Enrollment</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Enrollment</h2>
+                <Button
+                  onClick={generateCertificationPDF}
+                  className="bg-red-800 hover:bg-red-700 text-white"
+                  disabled={!student}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Certification (PDF)
+                </Button>
+              </div>
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Enrollment Status</CardTitle>
-                  <CardDescription>Your current enrollment status</CardDescription>
+                  <CardDescription>Your current enrollment status and information</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -814,19 +1841,68 @@ export default function StudentDashboard() {
                         <p className="text-sm text-green-600">
                           {enrollmentInfo?.status ||
                             (student.grade_level
-                              ? `Currently enrolled - ${student.grade_level}`
+                              ? `Currently enrolled - Grade ${student.grade_level}`
                               : "Enrollment status will be loaded from the database")}
                         </p>
                       </div>
                       <Badge className="bg-green-100 text-green-800">Active</Badge>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <h4 className="font-medium text-gray-800">Academic Year</h4>
-                      <p className="text-sm text-gray-600">
-                        {enrollmentInfo?.academicYear || "Academic year information will be loaded from the database."}
-                      </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h4 className="font-medium text-gray-800">Academic Year</h4>
+                        <p className="text-sm text-gray-600">
+                          {enrollmentInfo?.academicYear || "Academic year information will be loaded from the database."}
+                        </p>
+                      </div>
+                      {enrollmentInfo?.semester && (
+                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <h4 className="font-medium text-gray-800">Semester</h4>
+                          <p className="text-sm text-gray-600">{enrollmentInfo.semester}</p>
+                        </div>
+                      )}
+                      {enrollmentInfo?.strand && (
+                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <h4 className="font-medium text-gray-800">Strand</h4>
+                          <p className="text-sm text-gray-600">{enrollmentInfo.strand}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Subjects and Teachers */}
+              <Card className="bg-white border border-gray-200">
+                <CardHeader>
+                  <CardTitle>Subjects and Teachers</CardTitle>
+                  <CardDescription>Your enrolled subjects and assigned teachers</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {subjects.length === 0 ? (
+                    <div className="text-center py-12">
+                      <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" aria-hidden />
+                      <p className="text-gray-600">
+                        {dashboardLoading ? "Loading subjects..." : "No subjects assigned yet."}
+                      </p>
+                      <p className="text-sm text-gray-500 mt-2">Subject and teacher information will be loaded from the database.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {subjects.map((subject) => (
+                        <div
+                          key={subject.id}
+                          className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex-1">
+                            <h5 className="font-medium text-gray-900">{subject.subject}</h5>
+                            <p className="text-sm text-gray-600 mt-1">
+                              <span className="font-medium">Teacher:</span> {subject.teacher}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -834,59 +1910,117 @@ export default function StudentDashboard() {
 
           {activeNav === "schedule" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Schedule Calendar</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Calendar of Activities</h2>
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
-                  <CardTitle>Class Schedule</CardTitle>
-                  <CardDescription>Your weekly class schedule and important dates</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>SY 2025-2026 Calendar of Activities</CardTitle>
+                      <CardDescription>School activities and important dates</CardDescription>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateMonth("prev")}
+                        className="border-gray-300"
+                      >
+                        ←
+                      </Button>
+                      <span className="font-semibold text-gray-800 min-w-[200px] text-center">
+                        {monthNames[currentMonth]} {currentYear}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateMonth("next")}
+                        className="border-gray-300"
+                      >
+                        →
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium mb-4 text-red-800">Today&apos;s Classes</h4>
-                      <div className="space-y-3">
-                        {scheduleToday.length === 0 ? (
-                          <p className="text-sm text-gray-600">Schedule will be available soon.</p>
-                        ) : (
-                          scheduleToday.map((item) => (
-                            <div
-                              key={item.id}
-                              className={`flex items-center justify-between p-3 rounded-lg border ${
-                                accentStyles[item.accent ?? "blue"] ?? accentStyles.blue
-                              }`}
-                            >
-                              <div>
-                                <h5 className="font-medium">{item.subject}</h5>
-                                <p className="text-sm opacity-90">
-                                  {item.location}
-                                  {item.instructor ? ` - ${item.instructor}` : ""}
-                                </p>
-                              </div>
-                              <span className="text-sm font-medium">{item.time}</span>
-                            </div>
-                          ))
-                        )}
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-2 mb-4">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                      <div key={day} className="p-3 text-center font-semibold text-gray-700 text-base">
+                        {day}
                       </div>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-4 text-red-800">Upcoming Events</h4>
-                      <div className="space-y-3">
-                        {upcomingEvents.length === 0 ? (
-                          <p className="text-sm text-gray-600">No upcoming events posted.</p>
-                        ) : (
-                          upcomingEvents.map((event) => (
-                            <div
-                              key={event.id}
-                              className={`p-3 rounded-lg border ${
-                                accentStyles[event.accent ?? "orange"] ?? accentStyles.orange
-                              }`}
-                            >
-                              <h5 className="font-medium">{event.title}</h5>
-                              <p className="text-sm opacity-90">{formatDate(event.date)}</p>
-                              {event.description && <p className="text-xs opacity-80 mt-1">{event.description}</p>}
+                    ))}
+                    {calendarDays.map((day, index) => {
+                      if (!day) {
+                        return <div key={`empty-${index}`} className="aspect-square" />
+                      }
+                      const activities = getActivitiesForDate(day)
+                      const isToday =
+                        day.getDate() === new Date().getDate() &&
+                        day.getMonth() === new Date().getMonth() &&
+                        day.getFullYear() === new Date().getFullYear()
+                      const primaryCategory = activities[0]?.category || null
+                      const bgColor = primaryCategory ? categoryColors[primaryCategory] : ""
+
+                      return (
+                        <div
+                          key={day.toISOString()}
+                          className={`aspect-square border border-gray-200 rounded p-2 relative flex flex-col items-center justify-center ${
+                            isToday ? "ring-2 ring-red-600" : ""
+                          } ${bgColor}`}
+                        >
+                          <div className={`text-lg font-semibold text-center ${isToday ? "text-red-600" : "text-gray-900"}`}>
+                            {day.getDate()}
+                          </div>
+                          {activities.length > 0 && (
+                            <div className="mt-1 space-y-1 w-full">
+                              {activities.slice(0, 2).map((activity, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`text-xs px-1 py-1 rounded text-center truncate ${categoryColors[activity.category]}`}
+                                  title={activity.title}
+                                >
+                                  {activity.title.length > 20 ? activity.title.substring(0, 20) + "..." : activity.title}
+                                </div>
+                              ))}
+                              {activities.length > 2 && (
+                                <div className="text-xs text-gray-600 font-semibold text-center">
+                                  +{activities.length - 2} more
+                                </div>
+                              )}
                             </div>
-                          ))
-                        )}
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-3">Legend:</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-blue-200/50 border border-blue-300"></div>
+                        <span className="text-sm text-gray-700">Academic</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-green-200/50 border border-green-300"></div>
+                        <span className="text-sm text-gray-700">Event</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-red-200/50 border border-red-300"></div>
+                        <span className="text-sm text-gray-700">Test</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-yellow-200/50 border border-yellow-300"></div>
+                        <span className="text-sm text-gray-700">Workshop</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-pink-200/50 border border-pink-300"></div>
+                        <span className="text-sm text-gray-700">Celebration</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded bg-purple-200/50 border border-purple-300"></div>
+                        <span className="text-sm text-gray-700">Holiday</span>
                       </div>
                     </div>
                   </div>
@@ -897,7 +2031,17 @@ export default function StudentDashboard() {
 
           {activeNav === "grades" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Grades & Reports</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Grades & Reports</h2>
+                <Button
+                  onClick={generateGradesPDF}
+                  className="bg-red-800 hover:bg-red-700 text-white"
+                  disabled={!student}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Certificate (PDF)
+                </Button>
+              </div>
               <Card className="bg-white border border-gray-200">
                 <CardHeader>
                   <CardTitle>Current Grades</CardTitle>

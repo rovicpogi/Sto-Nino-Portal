@@ -33,12 +33,14 @@ import {
   Plus,
   Edit,
   Save,
+  Download,
   Bell,
   Clock,
   Home,
   Mail,
   User,
   Lock,
+  Settings,
 } from "lucide-react"
 
 
@@ -71,6 +73,278 @@ export default function TeacherPortal() {
     notes: "",
   })
   const [showAddJournal, setShowAddJournal] = useState(false)
+  const [schedule, setSchedule] = useState<any[]>([])
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedSection, setSelectedSection] = useState("Section A")
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1")
+  const [gradesData, setGradesData] = useState<any[]>([])
+  const [isSavingGrades, setIsSavingGrades] = useState(false)
+
+  // Dummy schedule data - in production, this would come from an API
+  const dummySchedule = [
+    { id: 1, timeStart: "08:00", timeEnd: "09:00", subject: "Mathematics", room: "Room 101", section: "Section A", day: "Monday" },
+    { id: 2, timeStart: "09:00", timeEnd: "10:00", subject: "Mathematics", room: "Room 101", section: "Section B", day: "Monday" },
+    { id: 3, timeStart: "10:30", timeEnd: "11:30", subject: "Science", room: "Room 205", section: "Section A", day: "Monday" },
+    { id: 4, timeStart: "13:00", timeEnd: "14:00", subject: "Mathematics", room: "Room 101", section: "Section C", day: "Monday" },
+    { id: 5, timeStart: "14:00", timeEnd: "15:00", subject: "Science", room: "Room 205", section: "Section B", day: "Monday" },
+    { id: 6, timeStart: "08:00", timeEnd: "09:00", subject: "Mathematics", room: "Room 101", section: "Section A", day: "Tuesday" },
+    { id: 7, timeStart: "09:00", timeEnd: "10:00", subject: "Mathematics", room: "Room 101", section: "Section B", day: "Tuesday" },
+    { id: 8, timeStart: "10:30", timeEnd: "11:30", subject: "Science", room: "Room 205", section: "Section A", day: "Tuesday" },
+    { id: 9, timeStart: "13:00", timeEnd: "14:00", subject: "Mathematics", room: "Room 101", section: "Section C", day: "Tuesday" },
+    { id: 10, timeStart: "14:00", timeEnd: "15:00", subject: "Science", room: "Room 205", section: "Section B", day: "Tuesday" },
+    { id: 11, timeStart: "08:00", timeEnd: "09:00", subject: "Mathematics", room: "Room 101", section: "Section A", day: "Wednesday" },
+    { id: 12, timeStart: "09:00", timeEnd: "10:00", subject: "Mathematics", room: "Room 101", section: "Section B", day: "Wednesday" },
+    { id: 13, timeStart: "10:30", timeEnd: "11:30", subject: "Science", room: "Room 205", section: "Section A", day: "Wednesday" },
+    { id: 14, timeStart: "13:00", timeEnd: "14:00", subject: "Mathematics", room: "Room 101", section: "Section C", day: "Wednesday" },
+    { id: 15, timeStart: "14:00", timeEnd: "15:00", subject: "Science", room: "Room 205", section: "Section B", day: "Wednesday" },
+    { id: 16, timeStart: "08:00", timeEnd: "09:00", subject: "Mathematics", room: "Room 101", section: "Section A", day: "Thursday" },
+    { id: 17, timeStart: "09:00", timeEnd: "10:00", subject: "Mathematics", room: "Room 101", section: "Section B", day: "Thursday" },
+    { id: 18, timeStart: "10:30", timeEnd: "11:30", subject: "Science", room: "Room 205", section: "Section A", day: "Thursday" },
+    { id: 19, timeStart: "13:00", timeEnd: "14:00", subject: "Mathematics", room: "Room 101", section: "Section C", day: "Thursday" },
+    { id: 20, timeStart: "14:00", timeEnd: "15:00", subject: "Science", room: "Room 205", section: "Section B", day: "Thursday" },
+    { id: 21, timeStart: "08:00", timeEnd: "09:00", subject: "Mathematics", room: "Room 101", section: "Section A", day: "Friday" },
+    { id: 22, timeStart: "09:00", timeEnd: "10:00", subject: "Mathematics", room: "Room 101", section: "Section B", day: "Friday" },
+    { id: 23, timeStart: "10:30", timeEnd: "11:30", subject: "Science", room: "Room 205", section: "Section A", day: "Friday" },
+    { id: 24, timeStart: "13:00", timeEnd: "14:00", subject: "Mathematics", room: "Room 101", section: "Section C", day: "Friday" },
+    { id: 25, timeStart: "14:00", timeEnd: "15:00", subject: "Science", room: "Room 205", section: "Section B", day: "Friday" },
+  ]
+
+  // Get day name from date
+  const getDayName = (dateString: string) => {
+    const date = new Date(dateString)
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    return days[date.getDay()]
+  }
+
+  // Get grading weights based on subject type
+  const getGradingWeights = (subject: string) => {
+    const subjectLower = subject?.toLowerCase() || ""
+    
+    // Group 1: Filipino/English/AP/ESP/MT
+    if (
+      subjectLower.includes("filipino") ||
+      subjectLower.includes("english") ||
+      subjectLower.includes("araling panlipunan") ||
+      subjectLower.includes("ap") ||
+      subjectLower.includes("esp") ||
+      subjectLower.includes("edukasyon sa pagpapakatao") ||
+      subjectLower.includes("mother tongue") ||
+      subjectLower.includes("mt")
+    ) {
+      return {
+        writtenWork: 30,
+        performanceTasks: 50,
+        quarterlyAssessment: 20,
+      }
+    }
+    
+    // Group 2: Science/Mathematics
+    if (
+      subjectLower.includes("science") ||
+      subjectLower.includes("mathematics") ||
+      subjectLower.includes("math")
+    ) {
+      return {
+        writtenWork: 40,
+        performanceTasks: 40,
+        quarterlyAssessment: 20,
+      }
+    }
+    
+    // Group 3: MAPEH/EPP/TLE/ELECTIVE/WRITING
+    if (
+      subjectLower.includes("mapeh") ||
+      subjectLower.includes("music") ||
+      subjectLower.includes("arts") ||
+      subjectLower.includes("physical education") ||
+      subjectLower.includes("health") ||
+      subjectLower.includes("epp") ||
+      subjectLower.includes("tle") ||
+      subjectLower.includes("technology") ||
+      subjectLower.includes("livelihood") ||
+      subjectLower.includes("elective") ||
+      subjectLower.includes("writing")
+    ) {
+      return {
+        writtenWork: 20,
+        performanceTasks: 60,
+        quarterlyAssessment: 20,
+      }
+    }
+    
+    // Default to Group 1 if subject not recognized
+    return {
+      writtenWork: 30,
+      performanceTasks: 50,
+      quarterlyAssessment: 20,
+    }
+  }
+
+  // Initialize dummy grades data
+  useEffect(() => {
+    if (teacher) {
+      const dummyStudents = [
+        { id: 1, name: "Juan Dela Cruz", studentNumber: "2024-001" },
+        { id: 2, name: "Maria Santos", studentNumber: "2024-002" },
+        { id: 3, name: "Jose Garcia", studentNumber: "2024-003" },
+        { id: 4, name: "Ana Reyes", studentNumber: "2024-004" },
+        { id: 5, name: "Carlos Mendoza", studentNumber: "2024-005" },
+        { id: 6, name: "Liza Torres", studentNumber: "2024-006" },
+        { id: 7, name: "Roberto Cruz", studentNumber: "2024-007" },
+        { id: 8, name: "Patricia Lim", studentNumber: "2024-008" },
+      ]
+
+      const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+      const weights = getGradingWeights(teacherSubject)
+
+      const initialGrades = dummyStudents.map((student) => ({
+        ...student,
+        writtenWork: Array(5).fill(""), // 5 written work items
+        performanceTasks: Array(5).fill(""), // 5 performance task items
+        quarterlyAssessment: "",
+      }))
+
+      setGradesData(initialGrades)
+    }
+  }, [teacher])
+
+  // Calculate final grade for a student
+  const calculateFinalGrade = (student: any) => {
+    const teacherSubject = teacher?.subject || teacher?.subjects || "Mathematics"
+    const weights = getGradingWeights(teacherSubject)
+
+    // Calculate Written Work average
+    const writtenWorkScores = student.writtenWork
+      .map((score: string) => parseFloat(score) || 0)
+      .filter((score: number) => score > 0)
+    const writtenWorkAvg =
+      writtenWorkScores.length > 0
+        ? writtenWorkScores.reduce((a: number, b: number) => a + b, 0) / writtenWorkScores.length
+        : 0
+
+    // Calculate Performance Tasks average
+    const performanceScores = student.performanceTasks
+      .map((score: string) => parseFloat(score) || 0)
+      .filter((score: number) => score > 0)
+    const performanceAvg =
+      performanceScores.length > 0
+        ? performanceScores.reduce((a: number, b: number) => a + b, 0) / performanceScores.length
+        : 0
+
+    // Quarterly Assessment
+    const quarterlyScore = parseFloat(student.quarterlyAssessment) || 0
+
+    // Calculate weighted final grade
+    const finalGrade =
+      (writtenWorkAvg * weights.writtenWork) / 100 +
+      (performanceAvg * weights.performanceTasks) / 100 +
+      (quarterlyScore * weights.quarterlyAssessment) / 100
+
+    return finalGrade > 0 ? finalGrade.toFixed(2) : ""
+  }
+
+  // Update grade value
+  const updateGrade = (studentId: number, category: string, index: number | null, value: string) => {
+    setGradesData((prev) =>
+      prev.map((student) => {
+        if (student.id === studentId) {
+          if (index !== null) {
+            // Array field (writtenWork or performanceTasks)
+            const newArray = [...student[category]]
+            newArray[index] = value
+            return { ...student, [category]: newArray }
+          } else {
+            // Single field (quarterlyAssessment)
+            return { ...student, [category]: value }
+          }
+        }
+        return student
+      })
+    )
+  }
+
+  // Save grades
+  const handleSaveGrades = async () => {
+    setIsSavingGrades(true)
+    // In production, this would save to the database
+    setTimeout(() => {
+      setIsSavingGrades(false)
+      alert("Grades saved successfully!")
+    }, 1000)
+  }
+
+  // Export grades to CSV
+  const handleExportToCSV = () => {
+    if (!teacher || gradesData.length === 0) {
+      alert("No grades data to export.")
+      return
+    }
+
+    const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+    const weights = getGradingWeights(teacherSubject)
+
+    // Create CSV header
+    const headers = [
+      "Student Number",
+      "Student Name",
+      "WW1", "WW2", "WW3", "WW4", "WW5",
+      "PT1", "PT2", "PT3", "PT4", "PT5",
+      "Quarterly Assessment",
+      "Final Grade",
+    ]
+
+    // Create CSV rows
+    const rows = gradesData.map((student) => {
+      const finalGrade = calculateFinalGrade(student)
+      return [
+        student.studentNumber || "",
+        student.name || "",
+        ...student.writtenWork.map((score: string) => score || ""),
+        ...student.performanceTasks.map((score: string) => score || ""),
+        student.quarterlyAssessment || "",
+        finalGrade || "",
+      ]
+    })
+
+    // Combine header and rows
+    const csvContent = [
+      // Metadata rows
+      [`Subject: ${teacherSubject}`],
+      [`Section: ${selectedSection}`],
+      [`Quarter: ${selectedQuarter}`],
+      [`Grading System: Written Work ${weights.writtenWork}%, Performance Tasks ${weights.performanceTasks}%, Quarterly Assessment ${weights.quarterlyAssessment}%`],
+      [], // Empty row
+      headers, // Column headers
+      ...rows, // Data rows
+    ]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    
+    link.setAttribute("href", url)
+    link.setAttribute(
+      "download",
+      `Grades_${teacherSubject.replace(/\s+/g, "_")}_${selectedSection}_${selectedQuarter}_${new Date().toISOString().split("T")[0]}.csv`
+    )
+    link.style.visibility = "hidden"
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  // Filter schedule for selected date
+  useEffect(() => {
+    const dayName = getDayName(selectedDate)
+    const daySchedule = dummySchedule.filter(item => item.day === dayName)
+    // Sort by time
+    daySchedule.sort((a, b) => a.timeStart.localeCompare(b.timeStart))
+    setSchedule(daySchedule)
+  }, [selectedDate])
 
   // Check if teacher is logged in on component mount
   useEffect(() => {
@@ -337,7 +611,7 @@ export default function TeacherPortal() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-7 mb-8">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <LayoutDashboard className="w-4 h-4 mr-2" />
               Dashboard
@@ -346,6 +620,10 @@ export default function TeacherPortal() {
               <User className="w-4 h-4 mr-2" />
               My Account
             </TabsTrigger>
+            <TabsTrigger value="calendar" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
+              <Calendar className="w-4 h-4 mr-2" />
+              Calendar
+            </TabsTrigger>
             <TabsTrigger value="grades" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <GraduationCap className="w-4 h-4 mr-2" />
               Manage Grades
@@ -353,6 +631,10 @@ export default function TeacherPortal() {
             <TabsTrigger value="journal" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <BookOpen className="w-4 h-4 mr-2" />
               Teaching Journal
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
             </TabsTrigger>
             <TabsTrigger value="logout" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <LogOut className="w-4 h-4 mr-2" />
@@ -511,6 +793,90 @@ export default function TeacherPortal() {
             </Card>
           </TabsContent>
 
+          {/* Calendar Tab */}
+          <TabsContent value="calendar" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-red-800">Daily Class Schedule</CardTitle>
+                <CardDescription>View your class schedule timeline for the day</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Date Selector */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <Label htmlFor="schedule-date" className="text-sm font-medium">Select Date:</Label>
+                    <Input
+                      id="schedule-date"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="w-48"
+                    />
+                    <Badge variant="outline" className="ml-auto">
+                      {getDayName(selectedDate)}
+                    </Badge>
+                  </div>
+
+                  {/* Timeline */}
+                  {schedule.length > 0 ? (
+                    <div className="relative">
+                      {/* Timeline line */}
+                      <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-red-200"></div>
+                      
+                      {/* Schedule items */}
+                      <div className="space-y-6">
+                        {schedule.map((item, index) => (
+                          <div key={item.id} className="relative flex items-start gap-4">
+                            {/* Time indicator */}
+                            <div className="relative z-10 flex flex-col items-center">
+                              <div className="w-16 h-16 rounded-full bg-red-800 flex items-center justify-center text-white font-semibold shadow-lg">
+                                <div className="text-center">
+                                  <div className="text-xs leading-tight">{item.timeStart}</div>
+                                  <div className="text-xs leading-tight">-</div>
+                                  <div className="text-xs leading-tight">{item.timeEnd}</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Schedule card */}
+                            <Card className="flex-1 ml-4 border-l-4 border-l-red-800 shadow-md">
+                              <CardContent className="p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <div className="text-sm text-gray-500 mb-1">Subject</div>
+                                    <div className="text-lg font-semibold text-red-800">{item.subject}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-500 mb-1">Room Number</div>
+                                    <div className="text-lg font-semibold">{item.room}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-500 mb-1">Section</div>
+                                    <div className="text-lg font-semibold">{item.section}</div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t flex items-center gap-2 text-sm text-gray-600">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Duration: {item.timeStart} - {item.timeEnd}</span>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 mb-2">No classes scheduled for {getDayName(selectedDate)}</p>
+                      <p className="text-sm text-gray-500">Select a different date to view your schedule</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Grades Management Tab */}
           <TabsContent value="grades" className="space-y-6">
             <Card>
@@ -519,10 +885,222 @@ export default function TeacherPortal() {
                 <CardDescription>View and update student grades for your classes</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Student grades will be loaded from the database.</p>
-                </div>
+                {teacher ? (
+                  <div className="space-y-6">
+                    {/* Filters */}
+                    <div className="flex flex-wrap items-center gap-4 pb-4 border-b">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="section-select" className="text-sm font-medium">Section:</Label>
+                        <Select value={selectedSection} onValueChange={setSelectedSection}>
+                          <SelectTrigger id="section-select" className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Section A">Section A</SelectItem>
+                            <SelectItem value="Section B">Section B</SelectItem>
+                            <SelectItem value="Section C">Section C</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="quarter-select" className="text-sm font-medium">Quarter:</Label>
+                        <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+                          <SelectTrigger id="quarter-select" className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Q1">Q1</SelectItem>
+                            <SelectItem value="Q2">Q2</SelectItem>
+                            <SelectItem value="Q3">Q3</SelectItem>
+                            <SelectItem value="Q4">Q4</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="ml-auto">
+                        <Badge variant="outline" className="text-sm">
+                          Subject: {teacher.subject || teacher.subjects || "N/A"}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Grading System Info */}
+                    {(() => {
+                      const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+                      const weights = getGradingWeights(teacherSubject)
+                      return (
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <div className="text-sm font-semibold text-blue-900 mb-2">Grading System ({teacherSubject}):</div>
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium">Written Work: </span>
+                              <span className="text-blue-700">{weights.writtenWork}%</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Performance Tasks: </span>
+                              <span className="text-blue-700">{weights.performanceTasks}%</span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Quarterly Assessment: </span>
+                              <span className="text-blue-700">{weights.quarterlyAssessment}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Spreadsheet-like Grades Table */}
+                    <div className="overflow-x-auto border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-red-800 text-white">
+                            <TableHead className="text-white font-bold sticky left-0 bg-red-800 z-10 min-w-[150px]">
+                              Student Name
+                            </TableHead>
+                            <TableHead className="text-white font-bold sticky left-[150px] bg-red-800 z-10 min-w-[100px]">
+                              Student No.
+                            </TableHead>
+                            <TableHead colSpan={5} className="text-white font-bold text-center border-l-2 border-white">
+                              Written Work ({(() => {
+                                const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+                                return getGradingWeights(teacherSubject).writtenWork
+                              })()}%)
+                            </TableHead>
+                            <TableHead colSpan={5} className="text-white font-bold text-center border-l-2 border-white">
+                              Performance Tasks ({(() => {
+                                const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+                                return getGradingWeights(teacherSubject).performanceTasks
+                              })()}%)
+                            </TableHead>
+                            <TableHead className="text-white font-bold text-center border-l-2 border-white min-w-[120px]">
+                              Quarterly Assessment ({(() => {
+                                const teacherSubject = teacher.subject || teacher.subjects || "Mathematics"
+                                return getGradingWeights(teacherSubject).quarterlyAssessment
+                              })()}%)
+                            </TableHead>
+                            <TableHead className="text-white font-bold text-center border-l-2 border-white min-w-[100px]">
+                              Final Grade
+                            </TableHead>
+                          </TableRow>
+                          <TableRow className="bg-gray-100">
+                            <TableHead className="sticky left-0 bg-gray-100 z-10"></TableHead>
+                            <TableHead className="sticky left-[150px] bg-gray-100 z-10"></TableHead>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <TableHead key={`ww-${i}`} className="text-center text-xs border-l min-w-[80px]">
+                                WW{i + 1}
+                              </TableHead>
+                            ))}
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <TableHead key={`pt-${i}`} className="text-center text-xs border-l min-w-[80px]">
+                                PT{i + 1}
+                              </TableHead>
+                            ))}
+                            <TableHead className="text-center text-xs border-l"></TableHead>
+                            <TableHead className="text-center text-xs border-l"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {gradesData.map((student) => (
+                            <TableRow key={student.id} className="hover:bg-gray-50">
+                              <TableCell className="font-medium sticky left-0 bg-white z-10 border-r">
+                                {student.name}
+                              </TableCell>
+                              <TableCell className="sticky left-[150px] bg-white z-10 border-r">
+                                {student.studentNumber}
+                              </TableCell>
+                              {/* Written Work cells */}
+                              {student.writtenWork.map((score: string, index: number) => (
+                                <TableCell key={`ww-${student.id}-${index}`} className="p-0 border-l">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    value={score}
+                                    onChange={(e) =>
+                                      updateGrade(student.id, "writtenWork", index, e.target.value)
+                                    }
+                                    className="border-0 rounded-none text-center focus:ring-2 focus:ring-red-500 h-10"
+                                    placeholder="0"
+                                  />
+                                </TableCell>
+                              ))}
+                              {/* Performance Tasks cells */}
+                              {student.performanceTasks.map((score: string, index: number) => (
+                                <TableCell key={`pt-${student.id}-${index}`} className="p-0 border-l">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    value={score}
+                                    onChange={(e) =>
+                                      updateGrade(student.id, "performanceTasks", index, e.target.value)
+                                    }
+                                    className="border-0 rounded-none text-center focus:ring-2 focus:ring-red-500 h-10"
+                                    placeholder="0"
+                                  />
+                                </TableCell>
+                              ))}
+                              {/* Quarterly Assessment cell */}
+                              <TableCell className="p-0 border-l">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  value={student.quarterlyAssessment}
+                                  onChange={(e) =>
+                                    updateGrade(student.id, "quarterlyAssessment", null, e.target.value)
+                                  }
+                                  className="border-0 rounded-none text-center focus:ring-2 focus:ring-red-500 h-10"
+                                  placeholder="0"
+                                />
+                              </TableCell>
+                              {/* Final Grade cell */}
+                              <TableCell className="text-center font-bold text-red-800 border-l bg-gray-50">
+                                {calculateFinalGrade(student) || "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Save and Export Buttons */}
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        onClick={handleExportToCSV}
+                        variant="outline"
+                        className="border-red-800 text-red-800 hover:bg-red-50"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Export to CSV
+                      </Button>
+                      <Button
+                        onClick={handleSaveGrades}
+                        disabled={isSavingGrades}
+                        className="bg-red-800 hover:bg-red-900"
+                      >
+                        {isSavingGrades ? (
+                          <>
+                            <Save className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Grades
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">Please log in to manage grades.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -618,6 +1196,25 @@ export default function TeacherPortal() {
                     <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">No journal entries yet.</p>
                     <p className="text-sm text-gray-500">Click "Add Entry" to create your first journal entry.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-red-800">Settings</CardTitle>
+                <CardDescription>Manage your account settings and preferences</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div className="text-center py-12">
+                    <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-4">Settings panel will be available here.</p>
+                    <p className="text-sm text-gray-500">Configure your account preferences and notification settings.</p>
                   </div>
                 </div>
               </CardContent>

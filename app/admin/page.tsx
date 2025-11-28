@@ -28,6 +28,8 @@ import {
   Wifi,
   Activity,
   Filter,
+  Radio,
+  Maximize2,
 } from "lucide-react"
 import {
   Dialog,
@@ -129,6 +131,13 @@ export default function AdminPortal() {
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
   const [showAddStudent, setShowAddStudent] = useState(false)
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
+  const [newStudentCredentials, setNewStudentCredentials] = useState<{
+    studentId: string
+    username: string
+    password: string
+    name: string
+  } | null>(null)
   const [newStudent, setNewStudent] = useState({
     name: "",
     studentId: "",
@@ -158,6 +167,14 @@ export default function AdminPortal() {
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null)
+  const [rfidScans, setRfidScans] = useState<any[]>([])
+  const [rfidScansLoading, setRfidScansLoading] = useState(false)
+  const [rfidScansError, setRfidScansError] = useState<string | null>(null)
+  const [showUpdateRfid, setShowUpdateRfid] = useState(false)
+  const [selectedStudentForRfid, setSelectedStudentForRfid] = useState<any>(null)
+  const [rfidCardNumber, setRfidCardNumber] = useState("")
+  const [rfidUpdateLoading, setRfidUpdateLoading] = useState(false)
+  const [rfidUpdateError, setRfidUpdateError] = useState<string | null>(null)
 
   const filteredStudents = useMemo(() => {
     return students.filter((student) => {
@@ -211,6 +228,15 @@ export default function AdminPortal() {
     setAttendanceError(null)
     try {
       const response = await fetch("/api/admin/attendance")
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        console.error("Non-JSON response:", text.substring(0, 200))
+        throw new Error("Server returned an invalid response. Please check the API endpoint.")
+      }
+      
       const result = await response.json()
       if (!response.ok || !result.success) {
         throw new Error(result.error || "Failed to load attendance data.")
@@ -218,7 +244,12 @@ export default function AdminPortal() {
       setAttendanceData(result.data)
     } catch (error: any) {
       console.error("Error fetching attendance:", error)
-      setAttendanceError(error?.message || "Unable to load attendance data.")
+      // Provide more user-friendly error message
+      if (error?.message?.includes("JSON") || error?.message?.includes("DOCTYPE")) {
+        setAttendanceError("Unable to connect to attendance service. Please check if the server is running.")
+      } else {
+        setAttendanceError(error?.message || "Unable to load attendance data.")
+      }
     } finally {
       setAttendanceLoading(false)
     }
@@ -306,6 +337,86 @@ export default function AdminPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
+  // Fetch RFID scans
+  const fetchRfidScans = async () => {
+    setRfidScansLoading(true)
+    setRfidScansError(null)
+    try {
+      const response = await fetch("/api/admin/attendance-live?limit=100")
+      const result = await response.json()
+      if (result.success && result.records) {
+        setRfidScans(result.records)
+      } else {
+        setRfidScansError(result.error || "Failed to load RFID scans.")
+      }
+    } catch (error: any) {
+      console.error("Error fetching RFID scans:", error)
+      setRfidScansError(error?.message || "Unable to load RFID scans.")
+    } finally {
+      setRfidScansLoading(false)
+    }
+  }
+
+  // Auto-refresh RFID scans every 5 seconds when tab is active
+  useEffect(() => {
+    if (admin && activeTab === "rfid-scans") {
+      fetchRfidScans()
+      const interval = setInterval(() => {
+        fetchRfidScans()
+      }, 5000) // Refresh every 5 seconds
+      return () => clearInterval(interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, admin])
+
+  // Update RFID card for student
+  const handleUpdateRfid = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setRfidUpdateError(null)
+
+    if (!rfidCardNumber.trim()) {
+      setRfidUpdateError("RFID card number is required.")
+      return
+    }
+
+    if (!selectedStudentForRfid) {
+      setRfidUpdateError("No student selected.")
+      return
+    }
+
+    setRfidUpdateLoading(true)
+
+    try {
+      const response = await fetch("/api/students/update-rfid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: selectedStudentForRfid.email,
+          rfidCard: rfidCardNumber.trim(),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        alert("RFID card updated successfully!")
+        setShowUpdateRfid(false)
+        setRfidCardNumber("")
+        setSelectedStudentForRfid(null)
+        setRfidUpdateError(null)
+        // Refresh the students list
+        fetchStudents()
+      } else {
+        setRfidUpdateError(data.error || "Failed to update RFID card. Please try again.")
+      }
+    } catch (error) {
+      console.error("Update RFID error:", error)
+      setRfidUpdateError("Error updating RFID card. Please try again.")
+    } finally {
+      setRfidUpdateLoading(false)
+    }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoggingIn(true)
@@ -359,12 +470,53 @@ export default function AdminPortal() {
     }
   }
 
+  // Generate next student ID
+  const generateNextStudentId = async () => {
+    try {
+      const response = await fetch("/api/admin/students")
+      const result = await response.json()
+      if (result.success && result.students && result.students.length > 0) {
+        // Find the highest student ID
+        const studentIds = result.students
+          .map((s: any) => {
+            const id = s.student_id || s.studentId || ""
+            // Extract numeric part if ID is in format like "2024-001" or "001"
+            const match = id.match(/\d+/)
+            return match ? parseInt(match[0]) : 0
+          })
+          .filter((id: number) => id > 0)
+        
+        const maxId = studentIds.length > 0 ? Math.max(...studentIds) : 0
+        const nextId = maxId + 1
+        // Format as YYYY-XXX (e.g., 2024-001)
+        const year = new Date().getFullYear()
+        return `${year}-${String(nextId).padStart(3, "0")}`
+      }
+    } catch (error) {
+      console.error("Error fetching students for ID generation:", error)
+    }
+    // Default: start with current year-001
+    const year = new Date().getFullYear()
+    return `${year}-001`
+  }
+
+  // Generate random password
+  const generatePassword = () => {
+    const length = 8
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    let password = ""
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length))
+    }
+    return password
+  }
+
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault()
     setStudentFormError(null)
 
-    if (!newStudent.name.trim() || !newStudent.studentId.trim() || !newStudent.section.trim()) {
-      setStudentFormError("Name, Student ID, and Section are required.")
+    if (!newStudent.name.trim() || !newStudent.section.trim()) {
+      setStudentFormError("Name and Section are required.")
       return
     }
 
@@ -372,19 +524,39 @@ export default function AdminPortal() {
       setStudentFormError("Please select a grade level.")
       return
     }
+
+    // Always auto-generate student ID (field is disabled, but ensure it's generated)
+    const studentId = await generateNextStudentId()
+
+    // Generate login credentials
+    const username = studentId // Use student ID as username
+    const password = generatePassword()
     
     try {
       const response = await fetch("/api/students", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newStudent),
+        body: JSON.stringify({
+          ...newStudent,
+          studentId: studentId,
+          username: username,
+          password: password,
+          firstLogin: true, // Flag for first-time login
+        }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        alert("Student added successfully!")
+        // Show credentials modal
+        setNewStudentCredentials({
+          studentId: studentId,
+          username: username,
+          password: password,
+          name: newStudent.name,
+        })
         setShowAddStudent(false)
+        setShowCredentialsModal(true)
         setNewStudent({
           name: "",
           studentId: "",
@@ -566,7 +738,7 @@ export default function AdminPortal() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-6 mb-8">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <LayoutDashboard className="w-4 h-4 mr-2" />
               Dashboard
@@ -574,6 +746,10 @@ export default function AdminPortal() {
             <TabsTrigger value="attendance" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <Clock className="w-4 h-4 mr-2" />
               Attendance & RFID
+            </TabsTrigger>
+            <TabsTrigger value="rfid-scans" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
+              <Radio className="w-4 h-4 mr-2" />
+              RFID Scans
             </TabsTrigger>
             <TabsTrigger value="students" className="data-[state=active]:bg-red-800 data-[state=active]:text-white">
               <Users className="w-4 h-4 mr-2" />
@@ -811,11 +987,11 @@ export default function AdminPortal() {
                         <Activity className="w-4 h-4 text-red-700" />
                         System Alerts
                       </h4>
-                      {attendanceData.recentAlerts.length === 0 ? (
+                      {!attendanceData.recentAlerts || attendanceData.recentAlerts.length === 0 ? (
                         <p className="text-sm text-gray-500">No alerts today.</p>
                       ) : (
                         <div className="space-y-3">
-                          {attendanceData.recentAlerts.map((alert) => (
+                          {attendanceData.recentAlerts.map((alert: any) => (
                             <div
                               key={alert.id}
                               className="flex items-center justify-between border border-gray-100 rounded-lg p-3 text-sm"
@@ -847,6 +1023,110 @@ export default function AdminPortal() {
                 ) : (
                   <div className="text-center text-gray-500 py-8">
                     Attendance data unavailable. Please refresh.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* RFID Scans Tab */}
+          <TabsContent value="rfid-scans" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-red-800">RFID Scan Records</CardTitle>
+                    <CardDescription>View real-time RFID card scans and attendance records</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open("/admin/rfid-display", "_blank")}
+                      className="flex items-center gap-2"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                      Open in New Window
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchRfidScans}
+                      disabled={rfidScansLoading}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCcw className={`w-4 h-4 ${rfidScansLoading ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+                {rfidScansError && (
+                  <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-md p-3 mt-3">
+                    <AlertCircle className="w-4 h-4 mt-0.5" />
+                    <span>{rfidScansError}</span>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                {rfidScansLoading && rfidScans.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">Loading RFID scans...</div>
+                ) : rfidScans.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No RFID scans found. Scans will appear here when students scan their cards.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-600 mb-4">
+                      Showing {rfidScans.length} recent scans (auto-refreshes every 5 seconds)
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Student Name</TableHead>
+                            <TableHead>Student ID</TableHead>
+                            <TableHead>Grade Level</TableHead>
+                            <TableHead>Section</TableHead>
+                            <TableHead>RFID Card</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rfidScans.map((scan) => (
+                            <TableRow key={scan.id}>
+                              <TableCell className="font-mono text-sm">
+                                {new Date(scan.scanTime).toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                })}
+                              </TableCell>
+                              <TableCell className="font-medium">{scan.studentName}</TableCell>
+                              <TableCell className="font-mono text-sm">{scan.studentId || "N/A"}</TableCell>
+                              <TableCell>{scan.gradeLevel}</TableCell>
+                              <TableCell>{scan.section}</TableCell>
+                              <TableCell className="font-mono text-sm">{scan.rfidCard}</TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    scan.status === "Present"
+                                      ? "bg-green-100 text-green-800"
+                                      : scan.status === "Late"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-red-100 text-red-800"
+                                  }
+                                >
+                                  {scan.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -888,9 +1168,12 @@ export default function AdminPortal() {
                             <Input
                               id="studentId"
                               value={newStudent.studentId}
-                              onChange={(e) => setNewStudent({ ...newStudent, studentId: e.target.value })}
-                              required
+                              disabled
+                              readOnly
+                              className="bg-gray-100 cursor-not-allowed"
+                              placeholder="Will be auto-generated"
                             />
+                            <p className="text-xs text-gray-500 mt-1">Auto-generated upon submission</p>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -960,6 +1243,52 @@ export default function AdminPortal() {
                         </form>
                       </DialogContent>
                     </Dialog>
+
+                    {/* Credentials Modal */}
+                    <Dialog open={showCredentialsModal} onOpenChange={setShowCredentialsModal}>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle className="text-red-800">Student Registration Successful</DialogTitle>
+                          <DialogDescription>
+                            Please provide these login credentials to the student. They will be required to change their password on first login.
+                          </DialogDescription>
+                        </DialogHeader>
+                        {newStudentCredentials && (
+                          <div className="space-y-4 py-4">
+                            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                              <div>
+                                <Label className="text-sm text-gray-600">Student Name</Label>
+                                <p className="font-semibold text-lg">{newStudentCredentials.name}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm text-gray-600">Student ID / Username</Label>
+                                <p className="font-mono font-semibold text-lg bg-white p-2 rounded border">{newStudentCredentials.username}</p>
+                              </div>
+                              <div>
+                                <Label className="text-sm text-gray-600">Temporary Password</Label>
+                                <p className="font-mono font-semibold text-lg bg-white p-2 rounded border text-red-600">{newStudentCredentials.password}</p>
+                              </div>
+                              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mt-4">
+                                <p className="text-sm text-yellow-800">
+                                  <strong>Important:</strong> The student must change their password and complete their profile on first login.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex justify-end">
+                              <Button
+                                onClick={() => {
+                                  setShowCredentialsModal(false)
+                                  setNewStudentCredentials(null)
+                                }}
+                                className="bg-red-800 hover:bg-red-700"
+                              >
+                                Close
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
                   </div>
                   <div className="flex flex-wrap gap-3 items-center">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -1008,19 +1337,21 @@ export default function AdminPortal() {
                         <TableHead>Name</TableHead>
                         <TableHead>Grade Level</TableHead>
                         <TableHead>Section</TableHead>
+                        <TableHead>RFID Card</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {loadingStudents ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-gray-500">
+                          <TableCell colSpan={7} className="text-center text-gray-500">
                             Loading students...
                           </TableCell>
                         </TableRow>
                       ) : filteredStudents.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-gray-500">
+                          <TableCell colSpan={7} className="text-center text-gray-500">
                             No students match the current filters.
                           </TableCell>
                         </TableRow>
@@ -1031,6 +1362,11 @@ export default function AdminPortal() {
                             <TableCell>{student.name || "N/A"}</TableCell>
                             <TableCell>{student.grade_level || "N/A"}</TableCell>
                             <TableCell>{student.section || "N/A"}</TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {student.rfid_card || student.rfidCard || student.rfid_tag || (
+                                <span className="text-gray-400 italic">Not assigned</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Select
                                 value={(student.status || "Enrolled").toLowerCase()}
@@ -1048,11 +1384,85 @@ export default function AdminPortal() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedStudentForRfid(student)
+                                  setRfidCardNumber(student.rfid_card || student.rfidCard || student.rfid_tag || "")
+                                  setShowUpdateRfid(true)
+                                }}
+                                className="text-xs"
+                              >
+                                <Radio className="w-3 h-3 mr-1" />
+                                Update RFID
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
                     </TableBody>
                   </Table>
+
+                  {/* Update RFID Dialog */}
+                  <Dialog open={showUpdateRfid} onOpenChange={setShowUpdateRfid}>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-red-800">Update RFID Card</DialogTitle>
+                        <DialogDescription>
+                          Assign or update RFID card for {selectedStudentForRfid?.name || "student"}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleUpdateRfid} className="space-y-4">
+                        <div>
+                          <Label htmlFor="studentInfo">Student Information</Label>
+                          <div className="bg-gray-50 p-3 rounded border">
+                            <p className="font-semibold">{selectedStudentForRfid?.name || "N/A"}</p>
+                            <p className="text-sm text-gray-600">
+                              {selectedStudentForRfid?.student_id || "N/A"} | {selectedStudentForRfid?.email || "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="rfidCard">RFID Card Number *</Label>
+                          <Input
+                            id="rfidCard"
+                            value={rfidCardNumber}
+                            onChange={(e) => setRfidCardNumber(e.target.value)}
+                            placeholder="Enter RFID card UID (e.g., 326e2ab)"
+                            required
+                            className="font-mono"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter the RFID card UID as scanned by the ESP32 device
+                          </p>
+                        </div>
+                        {rfidUpdateError && (
+                          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded text-sm">
+                            {rfidUpdateError}
+                          </div>
+                        )}
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setShowUpdateRfid(false)
+                              setRfidCardNumber("")
+                              setSelectedStudentForRfid(null)
+                              setRfidUpdateError(null)
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={rfidUpdateLoading} className="bg-red-800 hover:bg-red-700">
+                            {rfidUpdateLoading ? "Updating..." : "Update RFID"}
+                          </Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardContent>
             </Card>

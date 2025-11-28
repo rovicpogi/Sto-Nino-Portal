@@ -1,0 +1,8 @@
+{
+  "/api/admin/attendance-live/route": "app/api/admin/attendance-live/route.js",
+  "/page": "app/page.js",
+  "/student/page": "app/student/page.js",
+  "/teacher/page": "app/teacher/page.js",
+  "/admin/rfid-display/page": "app/admin/rfid-display/page.js",
+  "/admin/page": "app/admin/page.js"
+}
