@@ -30,10 +30,9 @@ type FilterType = "all" | "timein" | "timeout"
 
 export default function RfidDisplayPage() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
+  const [latestScan, setLatestScan] = useState<AttendanceRecord | null>(null)
   const [loadingAttendance, setLoadingAttendance] = useState(false)
   const [lastScanTime, setLastScanTime] = useState<string | null>(null)
-  const [flashingRecord, setFlashingRecord] = useState<AttendanceRecord | null>(null)
-  const [showFlash, setShowFlash] = useState(false)
   const [filterType, setFilterType] = useState<FilterType>("all")
   const [currentTime, setCurrentTime] = useState<string>("")
 
@@ -66,59 +65,38 @@ export default function RfidDisplayPage() {
       const result = await response.json()
       console.log('API Response:', result)
       
-      if (result.success && result.records) {
-        console.log('✅ Fetched records:', result.records.length, result.records)
+      if (result.success && result.records && result.records.length > 0) {
+        console.log('✅ Fetched records:', result.records.length)
+        
+        // Always show the LATEST scan (first record in the array, which is sorted by newest first)
+        const latest = result.records[0]
+        console.log('✅ Latest scan:', latest)
+        
+        // Update latest scan display
+        setLatestScan(latest)
+        
+        // Also update the records list for history
         if (onlyNew && result.records.length > 0) {
-          // Prepend new records to the beginning
           setAttendanceRecords((prev) => {
             const newRecords = result.records.filter(
               (newRec: AttendanceRecord) => !prev.some((p) => p.id === newRec.id)
             )
-            const updated = [...newRecords, ...prev].slice(0, 50)
-            console.log('Updated records:', updated.length, 'New:', newRecords.length)
-            
-            // Flash the newest record for 2 seconds
-            if (newRecords.length > 0) {
-              setFlashingRecord(newRecords[0])
-              setShowFlash(true)
-              
-              // Hide after 2 seconds
-              setTimeout(() => {
-                setShowFlash(false)
-                setTimeout(() => {
-                  setFlashingRecord(null)
-                }, 300) // Wait for fade out animation
-              }, 2000)
-            }
-            
-            return updated
+            return [...newRecords, ...prev].slice(0, 50)
           })
-          // Update last scan time
-          if (result.records[0]) {
-            setLastScanTime(result.records[0].scanTime)
-          }
         } else {
-          // Initial load
-          console.log('✅ Initial load - setting records:', result.records.length)
           setAttendanceRecords(result.records)
-          if (result.records.length > 0) {
-            setLastScanTime(result.records[0].scanTime)
-            console.log('✅ Latest record:', result.records[0])
-            console.log('✅ Display should show:', {
-              name: result.records[0].studentName,
-              grade: result.records[0].gradeLevel,
-              section: result.records[0].section,
-              isTeacher: result.records[0].isTeacher,
-              subject: result.records[0].subject
-            })
-          } else {
-            console.log('⚠️ No records in initial load')
-          }
         }
+        
+        // Update last scan time for polling
+        setLastScanTime(latest.scanTime)
       } else {
         console.log('❌ No records in response:', result)
-        console.log('Response success:', result.success)
-        console.log('Response records:', result.records)
+        if (!result.success) {
+          console.log('❌ API returned success: false')
+        }
+        if (!result.records || result.records.length === 0) {
+          console.log('⚠️ No records found in response')
+        }
       }
     } catch (error) {
       console.error("Error fetching live attendance:", error)
@@ -133,13 +111,14 @@ export default function RfidDisplayPage() {
     fetchLiveAttendance(false)
   }, [fetchLiveAttendance])
 
-  // Debug: Log when records change
+  // Debug: Log when latest scan changes
   useEffect(() => {
-    console.log('📊 Attendance records updated:', attendanceRecords.length)
-    if (attendanceRecords.length > 0) {
-      console.log('📊 First record:', attendanceRecords[0])
+    if (latestScan) {
+      console.log('📊 Latest scan updated:', latestScan)
+    } else {
+      console.log('📊 Latest scan cleared')
     }
-  }, [attendanceRecords])
+  }, [latestScan])
 
   // Poll for new records every 2 seconds
   useEffect(() => {
@@ -269,16 +248,16 @@ export default function RfidDisplayPage() {
         </div>
 
         {/* Latest Scan Display - Large Prominent Display */}
-        {attendanceRecords.length > 0 ? (
-          <Card className="mb-6 border-4 border-red-500 bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl">
+        {latestScan ? (
+          <Card className="mb-6 border-4 border-red-500 bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl animate-pulse">
             <CardContent className="p-8">
               <div className="flex items-center justify-center gap-8">
                 {/* Photo */}
                 <div className="flex-shrink-0">
-                  {attendanceRecords[0]?.studentPhoto ? (
+                  {latestScan.studentPhoto ? (
                     <Image
-                      src={attendanceRecords[0].studentPhoto}
-                      alt={attendanceRecords[0]?.studentName || "Student"}
+                      src={latestScan.studentPhoto}
+                      alt={latestScan.studentName || "Person"}
                       width={200}
                       height={200}
                       className="rounded-full border-4 border-red-500 shadow-2xl object-cover"
@@ -294,29 +273,29 @@ export default function RfidDisplayPage() {
                 <div className="flex-1 text-center">
                   <div className="mb-6">
                     <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Name</div>
-                    <div className="text-5xl font-bold text-white mb-4">{attendanceRecords[0]?.studentName || "Unknown"}</div>
+                    <div className="text-5xl font-bold text-white mb-4">{latestScan.studentName || "Unknown"}</div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-6 mb-6">
                     {/* For Students: Grade & Section */}
-                    {!attendanceRecords[0]?.isTeacher && (
+                    {!latestScan.isTeacher && (
                       <>
                         <div>
                           <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Grade Level</div>
-                          <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.gradeLevel || "N/A"}</div>
+                          <div className="text-3xl font-bold text-white">{latestScan.gradeLevel || "N/A"}</div>
                         </div>
                         <div>
                           <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Section</div>
-                          <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.section || "N/A"}</div>
+                          <div className="text-3xl font-bold text-white">{latestScan.section || "N/A"}</div>
                         </div>
                       </>
                     )}
                     
                     {/* For Teachers: Subject */}
-                    {attendanceRecords[0]?.isTeacher && (
+                    {latestScan.isTeacher && (
                       <div className="col-span-2">
                         <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Subject</div>
-                        <div className="text-3xl font-bold text-white">{attendanceRecords[0]?.subject || "N/A"}</div>
+                        <div className="text-3xl font-bold text-white">{latestScan.subject || "N/A"}</div>
                       </div>
                     )}
                   </div>
@@ -324,11 +303,11 @@ export default function RfidDisplayPage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Date</div>
-                      <div className="text-2xl font-bold text-white">{attendanceRecords[0]?.scanTime ? formatDate(attendanceRecords[0].scanTime) : "N/A"}</div>
+                      <div className="text-2xl font-bold text-white">{formatDate(latestScan.scanTime)}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Time</div>
-                      <div className="text-2xl font-bold text-white">{attendanceRecords[0]?.scanTime ? formatTime(attendanceRecords[0].scanTime) : "N/A"}</div>
+                      <div className="text-2xl font-bold text-white">{formatTime(latestScan.scanTime)}</div>
                     </div>
                   </div>
                   
@@ -336,15 +315,15 @@ export default function RfidDisplayPage() {
                   <div className="mt-6">
                     <Badge
                       className={
-                        attendanceRecords[0]?.scanType === "timein"
+                        latestScan.scanType === "timein"
                           ? "bg-green-600 text-white text-xl px-6 py-2"
-                          : attendanceRecords[0]?.scanType === "timeout"
+                          : latestScan.scanType === "timeout"
                           ? "bg-orange-600 text-white text-xl px-6 py-2"
                           : "bg-gray-600 text-white text-xl px-6 py-2"
                       }
                     >
-                      {attendanceRecords[0]?.scanType === "timein" ? "TIME IN" : 
-                       attendanceRecords[0]?.scanType === "timeout" ? "TIME OUT" : 
+                      {latestScan.scanType === "timein" ? "TIME IN" : 
+                       latestScan.scanType === "timeout" ? "TIME OUT" : 
                        "SCAN RECORDED"}
                     </Badge>
                   </div>
@@ -352,21 +331,19 @@ export default function RfidDisplayPage() {
               </div>
             </CardContent>
           </Card>
-        ) : null}
-
-        {/* No Scans Message */}
-        {attendanceRecords.length === 0 && (
-          <Card className="bg-gray-800 border-gray-700">
+        ) : (
+          <Card className="mb-6 bg-gray-800 border-gray-700">
             <CardContent className="py-20">
               <div className="text-center text-gray-400">
                 <Radio className="w-24 h-24 mx-auto mb-6 opacity-50" />
-                <p className="text-2xl">No scans yet. Waiting for RFID card scans...</p>
+                <p className="text-2xl">Waiting for RFID scan...</p>
+                <p className="text-sm mt-2">Scan an RFID card to see the latest attendance record</p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Recent Scans List - Only show if there are multiple scans */}
+        {/* Recent Scans List - Show history if there are multiple scans */}
         {attendanceRecords.length > 1 && (
           <Card className="bg-gray-800 border-gray-700">
             <CardHeader>
