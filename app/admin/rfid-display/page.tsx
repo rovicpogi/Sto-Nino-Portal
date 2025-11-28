@@ -20,6 +20,10 @@ interface AttendanceRecord {
   scanType?: 'timein' | 'timeout' | null
   timeIn?: string | null
   timeOut?: string | null
+  // Teacher fields
+  isTeacher?: boolean
+  subject?: string
+  role?: string
 }
 
 type FilterType = "all" | "timein" | "timeout"
@@ -237,69 +241,84 @@ export default function RfidDisplayPage() {
           </div>
         </div>
 
-        {/* Latest Scan Highlight */}
-        {flashingRecord && showFlash && (
-          <Card className="mb-6 border-2 border-red-500 bg-red-900/20 animate-pulse">
-            <CardHeader>
-              <CardTitle className="text-red-400 flex items-center gap-2">
-                <Radio className="w-5 h-5" />
-                New Scan Detected
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-6">
-                {/* Student Picture */}
+        {/* Latest Scan Display - Large Prominent Display */}
+        {attendanceRecords.length > 0 && (
+          <Card className="mb-6 border-4 border-red-500 bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl">
+            <CardContent className="p-8">
+              <div className="flex items-center justify-center gap-8">
+                {/* Photo */}
                 <div className="flex-shrink-0">
-                  {flashingRecord.studentPhoto ? (
+                  {attendanceRecords[0].studentPhoto ? (
                     <Image
-                      src={flashingRecord.studentPhoto}
-                      alt={flashingRecord.studentName}
-                      width={120}
-                      height={120}
-                      className="rounded-full border-4 border-red-500 shadow-lg object-cover"
+                      src={attendanceRecords[0].studentPhoto}
+                      alt={attendanceRecords[0].studentName}
+                      width={200}
+                      height={200}
+                      className="rounded-full border-4 border-red-500 shadow-2xl object-cover"
                     />
                   ) : (
-                    <div className="w-30 h-30 rounded-full border-4 border-red-500 bg-gray-700 flex items-center justify-center shadow-lg">
-                      <User className="w-16 h-16 text-gray-400" />
+                    <div className="w-50 h-50 rounded-full border-4 border-red-500 bg-gray-700 flex items-center justify-center shadow-2xl">
+                      <User className="w-24 h-24 text-gray-400" />
                     </div>
                   )}
                 </div>
-                {/* Student Information */}
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Student Name</div>
-                    <div className="text-2xl font-bold text-white">{flashingRecord.studentName}</div>
+                
+                {/* Information */}
+                <div className="flex-1 text-center">
+                  <div className="mb-6">
+                    <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Name</div>
+                    <div className="text-5xl font-bold text-white mb-4">{attendanceRecords[0].studentName}</div>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Grade & Section</div>
-                    <div className="text-2xl font-bold text-white">
-                      {flashingRecord.gradeLevel} - {flashingRecord.section}
+                  
+                  <div className="grid grid-cols-2 gap-6 mb-6">
+                    {/* For Students: Grade & Section */}
+                    {!attendanceRecords[0].isTeacher && (
+                      <>
+                        <div>
+                          <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Grade Level</div>
+                          <div className="text-3xl font-bold text-white">{attendanceRecords[0].gradeLevel || "N/A"}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Section</div>
+                          <div className="text-3xl font-bold text-white">{attendanceRecords[0].section || "N/A"}</div>
+                        </div>
+                      </>
+                    )}
+                    
+                    {/* For Teachers: Subject */}
+                    {attendanceRecords[0].isTeacher && (
+                      <div className="col-span-2">
+                        <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Subject</div>
+                        <div className="text-3xl font-bold text-white">{attendanceRecords[0].subject || "N/A"}</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Date</div>
+                      <div className="text-2xl font-bold text-white">{formatDate(attendanceRecords[0].scanTime)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-400 mb-2 uppercase tracking-wider">Time</div>
+                      <div className="text-2xl font-bold text-white">{formatTime(attendanceRecords[0].scanTime)}</div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Date</div>
-                    <div className="text-xl font-bold text-white">{formatDate(flashingRecord.scanTime)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Time</div>
-                    <div className="text-xl font-bold text-white">{formatTime(flashingRecord.scanTime)}</div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-sm text-gray-400 mb-1">RFID Card</div>
-                    <div className="text-xl font-mono font-bold text-red-400">{flashingRecord.rfidCard}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-400 mb-1">Status</div>
+                  
+                  {/* Scan Type Badge */}
+                  <div className="mt-6">
                     <Badge
                       className={
-                        flashingRecord.status === "Present"
-                          ? "bg-green-600 text-white text-lg px-3 py-1"
-                          : flashingRecord.status === "Late"
-                          ? "bg-yellow-600 text-white text-lg px-3 py-1"
-                          : "bg-red-600 text-white text-lg px-3 py-1"
+                        attendanceRecords[0].scanType === "timein"
+                          ? "bg-green-600 text-white text-xl px-6 py-2"
+                          : attendanceRecords[0].scanType === "timeout"
+                          ? "bg-orange-600 text-white text-xl px-6 py-2"
+                          : "bg-gray-600 text-white text-xl px-6 py-2"
                       }
                     >
-                      {flashingRecord.status}
+                      {attendanceRecords[0].scanType === "timein" ? "TIME IN" : 
+                       attendanceRecords[0].scanType === "timeout" ? "TIME OUT" : 
+                       "SCAN RECORDED"}
                     </Badge>
                   </div>
                 </div>
@@ -308,30 +327,39 @@ export default function RfidDisplayPage() {
           </Card>
         )}
 
-        {/* Recent Scans List */}
-        <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white">
-              Recent Scans ({filteredRecords.length}
-              {filterType !== "all" && ` of ${attendanceRecords.length} total`})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredRecords.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Radio className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>
-                  {attendanceRecords.length === 0
-                    ? "No scans yet. Waiting for RFID card scans..."
-                    : `No ${filterType === "timein" ? "time in" : "time out"} scans found.`}
-                </p>
+        {/* No Scans Message */}
+        {attendanceRecords.length === 0 && (
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="py-20">
+              <div className="text-center text-gray-400">
+                <Radio className="w-24 h-24 mx-auto mb-6 opacity-50" />
+                <p className="text-2xl">No scans yet. Waiting for RFID card scans...</p>
               </div>
-            ) : (
-              <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-                {filteredRecords.map((record, index) => {
-                  const isNewest = index === 0
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Recent Scans List - Only show if there are multiple scans */}
+        {attendanceRecords.length > 1 && (
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white">
+                Recent Scans ({filteredRecords.length - 1}
+                {filterType !== "all" && ` of ${attendanceRecords.length - 1} total`})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredRecords.slice(1).length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <p>
+                    {`No ${filterType === "timein" ? "time in" : "time out"} scans found.`}
+                  </p>
+                </div>
+              ) : (
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {filteredRecords.slice(1).map((record, index) => {
                   const recordDate = formatDate(record.scanTime)
-                  const prevDate = index > 0 ? formatDate(filteredRecords[index - 1].scanTime) : null
+                  const prevDate = index > 0 ? formatDate(filteredRecords[index + 1].scanTime) : null
                   const showDateSeparator = recordDate !== prevDate
 
                   return (
@@ -341,15 +369,9 @@ export default function RfidDisplayPage() {
                           {recordDate}
                         </div>
                       )}
-                      <div
-                        className={`flex items-center justify-between p-4 rounded-lg border ${
-                          isNewest
-                            ? "bg-red-900/20 border-red-500/50"
-                            : "bg-gray-700/50 border-gray-600"
-                        } hover:bg-gray-700 transition-colors`}
-                      >
+                      <div className="flex items-center justify-between p-4 rounded-lg border bg-gray-700/50 border-gray-600 hover:bg-gray-700 transition-colors">
                         <div className="flex items-center gap-4 flex-1">
-                          {/* Student Picture */}
+                          {/* Photo */}
                           <div className="flex-shrink-0">
                             {record.studentPhoto ? (
                               <Image
@@ -371,30 +393,30 @@ export default function RfidDisplayPage() {
                             <div className="text-sm font-semibold text-white">{formatDate(record.scanTime)}</div>
                             <div className="text-lg font-mono text-gray-300 mt-1">{formatTime(record.scanTime)}</div>
                           </div>
-                          {/* Student Information */}
+                          {/* Name and Info */}
                           <div className="flex-1">
                             <div className="text-xl font-bold text-white mb-1">{record.studentName}</div>
                             <div className="text-sm text-gray-400">
-                              {record.gradeLevel} - {record.section} | ID: {record.studentId || "N/A"}
+                              {record.isTeacher 
+                                ? `Subject: ${record.subject || "N/A"}`
+                                : `${record.gradeLevel || "N/A"} - ${record.section || "N/A"} | ID: ${record.studentId || "N/A"}`
+                              }
                             </div>
                           </div>
-                          {/* RFID Card */}
-                          <div className="text-right">
-                            <div className="text-sm text-gray-400 mb-1">RFID Card</div>
-                            <div className="font-mono text-lg font-bold text-red-400">{record.rfidCard}</div>
-                          </div>
-                          {/* Status */}
+                          {/* Scan Type */}
                           <div>
                             <Badge
                               className={
-                                record.status === "Present"
+                                record.scanType === "timein"
                                   ? "bg-green-600 text-white"
-                                  : record.status === "Late"
-                                  ? "bg-yellow-600 text-white"
-                                  : "bg-red-600 text-white"
+                                  : record.scanType === "timeout"
+                                  ? "bg-orange-600 text-white"
+                                  : "bg-gray-600 text-white"
                               }
                             >
-                              {record.status}
+                              {record.scanType === "timein" ? "TIME IN" : 
+                               record.scanType === "timeout" ? "TIME OUT" : 
+                               "SCAN"}
                             </Badge>
                           </div>
                         </div>
@@ -406,8 +428,10 @@ export default function RfidDisplayPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   )
 }
+
 
