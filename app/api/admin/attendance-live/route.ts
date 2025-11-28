@@ -44,7 +44,16 @@ export async function GET(request: Request) {
         success: false,
         error: 'Failed to fetch attendance records',
         records: [],
-      }, { status: 500 })
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      }, { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      })
     }
 
     // Fetch student information for all records
