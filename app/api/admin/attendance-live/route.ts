@@ -261,24 +261,38 @@ export async function GET(request: Request) {
                    record.type.toLowerCase() === 'time_out' || record.type.toLowerCase() === 'timeout' ? 'timeout' : null
       }
       
-      // Get student info from map
+      // Get student or teacher info from maps
       const student = studentMap[record.student_id] || null
+      const teacher = teacherMap[record.student_id] || null
+      
+      // Determine if this is a teacher or student
+      const isTeacher = !!teacher || (student && (
+        student.role === 'teacher' || 
+        student.user_type === 'teacher' ||
+        student.teacher_id ||
+        (!student.student_id && !student.student_number)
+      ))
+      
+      const person = teacher || student
       
       return {
         id: record.id,
         studentId: record.student_id,
-        studentName: student
-          ? `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() || student.name || 'Unknown Student'
-          : 'Unknown Student',
-        gradeLevel: student?.grade_level || student?.gradeLevel || 'N/A',
-        section: student?.section || 'N/A',
+        studentName: person
+          ? `${person.first_name || person.firstName || ''} ${person.last_name || person.lastName || ''}`.trim() || person.name || 'Unknown'
+          : 'Unknown',
+        gradeLevel: isTeacher ? null : (person?.grade_level || person?.gradeLevel || 'N/A'),
+        section: isTeacher ? null : (person?.section || 'N/A'),
         scanTime: record.scan_time || record.created_at,
         status: record.status || 'Present',
         rfidCard: record.rfid_card || 'N/A',
-        studentPhoto: student?.photo_url || student?.profile_picture || student?.picture || null,
+        studentPhoto: person?.photo_url || person?.profile_picture || person?.picture || null,
         scanType: scanType,
         timeIn: record.time_in || null,
         timeOut: record.time_out || null,
+        isTeacher: isTeacher || false,
+        subject: isTeacher ? (person?.subject || person?.subjects || person?.subject_taught || 'N/A') : null,
+        role: person?.role || null,
       }
     })
 
