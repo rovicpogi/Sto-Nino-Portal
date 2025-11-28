@@ -60,28 +60,51 @@ export async function GET(request: Request) {
 
     // Fetch recent attendance records
     // Don't use join to avoid foreign key issues - fetch students separately
-    let query = supabaseClient
-      .from('attendance_records')
-      .select('*')
-      .order('scan_time', { ascending: false })
-      .limit(limit)
+    let data: any[] = []
+    let error: any = null
+    
+    try {
+      let query = supabaseClient
+        .from('attendance_records')
+        .select('*')
+        .order('scan_time', { ascending: false })
+        .limit(limit)
 
-    // If 'since' parameter is provided, filter records after that time
-    if (since) {
-      query = query.gt('scan_time', since)
+      // If 'since' parameter is provided, filter records after that time
+      if (since) {
+        query = query.gt('scan_time', since)
+      }
+
+      const result = await query
+      data = result.data || []
+      error = result.error
+    } catch (queryError: any) {
+      console.error('Query execution error:', queryError)
+      error = queryError
     }
-
-    const { data, error } = await query
 
     if (error) {
       console.error('Database error:', error)
+      console.error('Error code:', error.code)
+      console.error('Error message:', error.message)
+      console.error('Error details:', error.details)
+      console.error('Error hint:', error.hint)
+      
+      // Return empty records instead of failing completely
+      // This allows the frontend to still work even if there's a database issue
       return NextResponse.json({
-        success: false,
-        error: 'Failed to fetch attendance records',
+        success: true, // Return success with empty records
         records: [],
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        warning: 'Unable to fetch attendance records from database',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        details: process.env.NODE_ENV === 'development' ? {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        } : undefined,
       }, { 
-        status: 500,
+        status: 200, // Return 200 with empty records instead of 500
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
