@@ -331,6 +331,16 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Debug: Log environment variables
+  console.log("=== POST: ENVIRONMENT VARIABLES DEBUG ===")
+  console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING")
+  console.log("URL Value:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log("ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "MISSING")
+  console.log("ANON Key (first 20 chars):", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) || "MISSING")
+  console.log("SERVICE:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET" : "MISSING")
+  console.log("SERVICE Key (first 20 chars):", process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) || "MISSING")
+  console.log("==========================================")
+
   try {
     // Handle CORS preflight
     const headers = {
