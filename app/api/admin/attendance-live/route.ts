@@ -76,51 +76,72 @@ export async function GET(request: Request) {
       console.log('Limit:', limit)
       console.log('Since:', since)
       
-      // Use a simple query with explicit column selection
-      // Avoid using '*' which can trigger PostgREST relationship validation
-      let query = supabaseClient
-        .from('attendance_records')
-        .select('id, scan_time, scan_type, student_id, rfid_card, rfid_tag, status, time_in, time_out, created_at, device_id') // Explicit columns only
-        .order('scan_time', { ascending: false })
-        .limit(limit)
-
-      // If 'since' parameter is provided, filter records after that time
-      if (since) {
-        query = query.gt('scan_time', since)
-      }
-
-      const result = await query
-      data = result.data || []
-      error = result.error
+      // Try the simplest possible query first to avoid any PostgREST issues
+      // Start with minimal columns and work up if needed
+      let queryAttempt = 1
+      let lastError: any = null
       
-      if (error) {
-        console.error('Select query error:', error)
-        console.error('Error code:', error.code)
-        console.error('Error message:', error.message)
-        console.error('Error details:', error.details)
-        console.error('Error hint:', error.hint)
+      // Attempt 1: Simplest query (just id and scan_time)
+      try {
+        let simpleQuery = supabaseClient
+          .from('attendance_records')
+          .select('id, scan_time')
+          .order('scan_time', { ascending: false })
+          .limit(limit)
         
-        // If it's a relationship error, try using RPC or a simpler approach
-        if (error.code === 'PGRST200' || error.message?.includes('relationship')) {
-          console.log('PostgREST relationship error detected, trying alternative query...')
-          // Try with even fewer columns
-          const simpleResult = await supabaseClient
+        if (since) {
+          simpleQuery = simpleQuery.gt('scan_time', since)
+        }
+        
+        const simpleResult = await simpleQuery
+        if (!simpleResult.error && simpleResult.data) {
+          console.log('Simple query successful, fetching full data...')
+          data = simpleResult.data || []
+          error = null
+          
+          // Now fetch full records one by one or in batches if needed
+          // For now, just use the simple data and fetch student info separately
+        } else {
+          lastError = simpleResult.error
+          throw simpleResult.error
+        }
+      } catch (simpleError: any) {
+        console.error('Simple query failed, trying with more columns...', simpleError)
+        lastError = simpleError
+        
+        // Attempt 2: Try with a few more columns
+        try {
+          let mediumQuery = supabaseClient
             .from('attendance_records')
-            .select('id, scan_time, student_id')
+            .select('id, scan_time, scan_type, student_id, rfid_card, status')
             .order('scan_time', { ascending: false })
             .limit(limit)
           
-          if (!simpleResult.error) {
-            data = simpleResult.data || []
-            error = null
-            console.log('Simple query successful, records:', data.length)
-          } else {
-            error = simpleResult.error
-            console.error('Simple query also failed:', error)
+          if (since) {
+            mediumQuery = mediumQuery.gt('scan_time', since)
           }
+          
+          const mediumResult = await mediumQuery
+          if (!mediumResult.error) {
+            data = mediumResult.data || []
+            error = null
+            console.log('Medium query successful, records:', data.length)
+          } else {
+            throw mediumResult.error
+          }
+        } catch (mediumError: any) {
+          console.error('Medium query also failed:', mediumError)
+          lastError = mediumError
+          error = mediumError
         }
-      } else {
-        console.log('Select query successful, records:', data.length)
+      }
+      
+      if (error) {
+        console.error('All query attempts failed. Last error:', lastError)
+        console.error('Error code:', lastError?.code)
+        console.error('Error message:', lastError?.message)
+        console.error('Error details:', lastError?.details)
+        console.error('Error hint:', lastError?.hint)
       }
     } catch (queryError: any) {
       console.error('Query execution exception:', queryError)
