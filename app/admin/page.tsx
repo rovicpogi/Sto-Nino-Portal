@@ -60,6 +60,9 @@ interface Student {
   phone?: string
   status?: string
   created_at?: string
+  rfid_card?: string
+  rfidCard?: string
+  rfid_tag?: string
 }
 
 interface AttendanceData {
@@ -260,6 +263,14 @@ export default function AdminPortal() {
     setSettingsFeedback(null)
     try {
       const response = await fetch("/api/admin/settings")
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        throw new Error(`Invalid response format: ${text.substring(0, 100)}`)
+      }
+      
       const result = await response.json()
       if (!response.ok || !result.success) {
         throw new Error(result.error || "Failed to load settings.")
@@ -313,10 +324,13 @@ export default function AdminPortal() {
 
   useEffect(() => {
     if (admin) {
-      fetchStats()
-      fetchStudents()
-      fetchAttendance()
-      fetchSettings()
+      // Wrap async calls to prevent unhandled promise rejections
+      Promise.all([
+        fetchStats().catch(err => console.error("Error in fetchStats:", err)),
+        fetchStudents().catch(err => console.error("Error in fetchStudents:", err)),
+        fetchAttendance().catch(err => console.error("Error in fetchAttendance:", err)),
+        fetchSettings().catch(err => console.error("Error in fetchSettings:", err)),
+      ])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin])
@@ -324,7 +338,7 @@ export default function AdminPortal() {
   // Refresh attendance data when tab opened
   useEffect(() => {
     if (admin && activeTab === "attendance" && !attendanceData && !attendanceLoading) {
-      fetchAttendance()
+      fetchAttendance().catch(err => console.error("Error in fetchAttendance:", err))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
@@ -332,7 +346,7 @@ export default function AdminPortal() {
   // Fetch students when tab changes to students
   useEffect(() => {
     if (admin && activeTab === "students" && !loadingStudents) {
-      fetchStudents()
+      fetchStudents().catch(err => console.error("Error in fetchStudents:", err))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
@@ -343,6 +357,14 @@ export default function AdminPortal() {
     setRfidScansError(null)
     try {
       const response = await fetch("/api/admin/attendance-live?limit=100")
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        throw new Error(`Invalid response format: ${text.substring(0, 100)}`)
+      }
+      
       const result = await response.json()
       if (result.success && result.records) {
         setRfidScans(result.records)
@@ -360,9 +382,9 @@ export default function AdminPortal() {
   // Auto-refresh RFID scans every 5 seconds when tab is active
   useEffect(() => {
     if (admin && activeTab === "rfid-scans") {
-      fetchRfidScans()
+      fetchRfidScans().catch(err => console.error("Error in fetchRfidScans:", err))
       const interval = setInterval(() => {
-        fetchRfidScans()
+        fetchRfidScans().catch(err => console.error("Error in fetchRfidScans:", err))
       }, 5000) // Refresh every 5 seconds
       return () => clearInterval(interval)
     }
