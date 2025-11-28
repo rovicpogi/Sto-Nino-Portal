@@ -44,29 +44,25 @@ CREATE POLICY "Students view own attendance" ON attendance_records
   );
 
 -- Allow parents to view their children's attendance
--- NOTE: Adjust this policy based on your actual parent-student relationship schema
--- Common options:
--- 1. If you have a parent_id or parent_user_id column in students table
--- 2. If you have a separate parent_students junction table
--- 3. If parents are linked via email matching
+-- NOTE: This policy is commented out by default since parent-student relationship
+-- schema varies. Uncomment and adjust based on your actual schema.
 
--- Option 1: If students table has parent_id or parent_user_id
-CREATE POLICY "Parents view children attendance" ON attendance_records
-  FOR SELECT
-  USING (
-    student_id IN (
-      SELECT student_id::text FROM students 
-      WHERE parent_id = auth.uid()::text
-         OR parent_user_id = auth.uid()::text
-    )
-    OR student_id IN (
-      SELECT student_number FROM students 
-      WHERE parent_id = auth.uid()::text
-         OR parent_user_id = auth.uid()::text
-    )
-  );
+-- If you don't have a parent-student relationship, you can skip this policy entirely
+-- or use one of the options below:
 
--- If the above doesn't work, comment it out and use one of these alternatives:
+-- Option 1: If students table has parent_id column
+-- CREATE POLICY "Parents view children attendance" ON attendance_records
+--   FOR SELECT
+--   USING (
+--     student_id IN (
+--       SELECT student_id::text FROM students 
+--       WHERE parent_id = auth.uid()::text
+--     )
+--     OR student_id IN (
+--       SELECT student_number FROM students 
+--       WHERE parent_id = auth.uid()::text
+--     )
+--   );
 
 -- Option 2: If you have a parent_students junction table
 -- CREATE POLICY "Parents view children attendance" ON attendance_records
@@ -78,7 +74,7 @@ CREATE POLICY "Parents view children attendance" ON attendance_records
 --     )
 --   );
 
--- Option 3: If parents can see all records (less secure)
+-- Option 3: If parents can see all records (less secure - use with caution)
 -- CREATE POLICY "Parents view children attendance" ON attendance_records
 --   FOR SELECT
 --   USING (true);
