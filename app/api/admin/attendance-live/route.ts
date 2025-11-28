@@ -20,22 +20,10 @@ export async function GET(request: Request) {
     const since = searchParams.get('since') // Optional: get records since this timestamp
 
     // Fetch recent attendance records
-    // Join with students table to get student information
+    // Don't use join to avoid foreign key issues - fetch students separately
     let query = supabase
       .from('attendance_records')
-      .select(`
-        *,
-        students (
-          student_id,
-          first_name,
-          last_name,
-          grade_level,
-          section,
-          photo_url,
-          profile_picture,
-          picture
-        )
-      `)
+      .select('*')
       .order('scan_time', { ascending: false })
       .limit(limit)
 
@@ -55,10 +43,45 @@ export async function GET(request: Request) {
       }, { status: 500 })
     }
 
+    // Fetch student information for all records
+    const studentIds = [...new Set((data || []).map((r: any) => r.student_id).filter(Boolean))]
+    const studentMap: Record<string, any> = {}
+    
+    if (studentIds.length > 0) {
+      // Fetch all students at once
+      const { data: studentsData } = await supabaseClient
+        .from('students')
+        .select('*')
+        .in('student_id', studentIds.length > 0 ? studentIds : [''])
+        .limit(1000)
+      
+      // Also try student_number and id
+      if (!studentsData || studentsData.length === 0) {
+        const { data: studentsByNumber } = await supabaseClient
+          .from('students')
+          .select('*')
+          .in('student_number', studentIds)
+          .limit(1000)
+        
+        if (studentsByNumber) {
+          studentsData?.push(...studentsByNumber)
+        }
+      }
+      
+      // Create a map for quick lookup
+      if (studentsData) {
+        studentsData.forEach((student: any) => {
+          const key = student.student_id || student.student_number || student.id
+          if (key) {
+            studentMap[key] = student
+          }
+        })
+      }
+    }
+
     // Format the response
     const formattedRecords = (data || []).map((record: any) => {
       // Determine scan type from database fields
-      // Check for time_in, time_out, scan_type, or type fields
       let scanType: 'timein' | 'timeout' | null = null
       
       if (record.time_in && record.scan_time === record.time_in) {
@@ -73,19 +96,22 @@ export async function GET(request: Request) {
                    record.type.toLowerCase() === 'time_out' || record.type.toLowerCase() === 'timeout' ? 'timeout' : null
       }
       
+      // Get student info from map
+      const student = studentMap[record.student_id] || null
+      
       return {
         id: record.id,
-        studentId: record.student_id || record.students?.student_id,
-        studentName: record.students 
-          ? `${record.students.first_name || ''} ${record.students.last_name || ''}`.trim()
+        studentId: record.student_id,
+        studentName: student
+          ? `${student.first_name || student.firstName || ''} ${student.last_name || student.lastName || ''}`.trim() || student.name || 'Unknown Student'
           : 'Unknown Student',
-        gradeLevel: record.students?.grade_level || 'N/A',
-        section: record.students?.section || 'N/A',
+        gradeLevel: student?.grade_level || student?.gradeLevel || 'N/A',
+        section: student?.section || 'N/A',
         scanTime: record.scan_time || record.created_at,
         status: record.status || 'Present',
         rfidCard: record.rfid_card || 'N/A',
-        studentPhoto: record.students?.photo_url || record.students?.profile_picture || record.students?.picture || null,
-        scanType: scanType, // Include scan type from database
+        studentPhoto: student?.photo_url || student?.profile_picture || student?.picture || null,
+        scanType: scanType,
         timeIn: record.time_in || null,
         timeOut: record.time_out || null,
       }
@@ -314,22 +340,11 @@ export async function POST(request: Request) {
     // Optional type field for compatibility
     attendanceRecord.type = scanType
     
+    // Insert the attendance record (without join to avoid foreign key issues)
     const { data: newRecord, error: insertError } = await supabaseClient
       .from('attendance_records')
       .insert([attendanceRecord])
-      .select(`
-        *,
-        students (
-          student_id,
-          first_name,
-          last_name,
-          grade_level,
-          section,
-          photo_url,
-          profile_picture,
-          picture
-        )
-      `)
+      .select('*')
       .single()
 
     if (insertError) {
@@ -344,28 +359,60 @@ export async function POST(request: Request) {
           scanType,
           timeIn,
           timeOut,
+        }, {
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
         })
       }
       
       return NextResponse.json(
-        { success: false, error: insertError.message },
-        { status: 500 }
+        { 
+          success: false, 
+          error: insertError.message,
+          hint: 'Please check that all required columns exist in attendance_records table. Run create-attendance-table.sql in Supabase.'
+        },
+        { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        }
       )
+    }
+
+    // Fetch student information separately to avoid join issues
+    let studentInfo: any = null
+    if (studentId) {
+      const { data: studentData } = await supabaseClient
+        .from('students')
+        .select('*')
+        .or(`student_id.eq.${studentId},student_number.eq.${studentId},id.eq.${studentId}`)
+        .limit(1)
+        .single()
+      
+      if (studentData) {
+        studentInfo = studentData
+      }
     }
 
     // Format the response
     const formattedRecord = {
       id: newRecord.id,
-      studentId: newRecord.student_id || newRecord.students?.student_id,
-      studentName: newRecord.students 
-        ? `${newRecord.students.first_name || ''} ${newRecord.students.last_name || ''}`.trim()
+      studentId: newRecord.student_id || studentId,
+      studentName: studentInfo
+        ? `${studentInfo.first_name || studentInfo.firstName || ''} ${studentInfo.last_name || studentInfo.lastName || ''}`.trim() || studentInfo.name || 'Unknown Student'
         : 'Unknown Student',
-      gradeLevel: newRecord.students?.grade_level || 'N/A',
-      section: newRecord.students?.section || 'N/A',
+      gradeLevel: studentInfo?.grade_level || studentInfo?.gradeLevel || 'N/A',
+      section: studentInfo?.section || 'N/A',
       scanTime: newRecord.scan_time || newRecord.created_at,
       status: newRecord.status || 'Present',
-      rfidCard: newRecord.rfid_card || 'N/A',
-      studentPhoto: newRecord.students?.photo_url || newRecord.students?.profile_picture || newRecord.students?.picture || null,
+      rfidCard: newRecord.rfid_card || scanData.rfidCard || 'N/A',
+      studentPhoto: studentInfo?.photo_url || studentInfo?.profile_picture || studentInfo?.picture || null,
       scanType: scanType,
       timeIn: newRecord.time_in || null,
       timeOut: newRecord.time_out || null,
