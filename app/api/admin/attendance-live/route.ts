@@ -21,7 +21,42 @@ export async function GET(request: Request) {
     const since = searchParams.get('since') // Optional: get records since this timestamp
 
     // Use admin client to avoid RLS UUID/TEXT comparison errors
-    const supabaseClient = getSupabaseAdmin()
+    let supabaseClient
+    try {
+      supabaseClient = getSupabaseAdmin()
+    } catch (clientError: any) {
+      console.error('Failed to get Supabase admin client:', clientError)
+      return NextResponse.json({
+        success: false,
+        error: 'Database client initialization failed',
+        records: [],
+        details: process.env.NODE_ENV === 'development' ? clientError?.message : undefined,
+      }, { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      })
+    }
+
+    if (!supabaseClient) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database client not available',
+        records: [],
+      }, { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      })
+    }
 
     // Fetch recent attendance records
     // Don't use join to avoid foreign key issues - fetch students separately
@@ -62,24 +97,32 @@ export async function GET(request: Request) {
     const studentMap: Record<string, any> = {}
     
     if (studentIds.length > 0) {
-      // Fetch all students and filter in memory to avoid UUID/TEXT comparison issues
-      const { data: allStudents } = await supabaseClient
-        .from('students')
-        .select('*')
-        .limit(1000)
-      
-      if (allStudents) {
-        // Create a map for quick lookup - check all possible ID fields
-        allStudents.forEach((student: any) => {
-          const studentIdStr = (student.student_id || '').toString().trim()
-          const studentNumberStr = (student.student_number || '').toString().trim()
-          const studentIdUuid = (student.id || '').toString().trim()
-          
-          // Map by all possible identifiers
-          if (studentIdStr) studentMap[studentIdStr] = student
-          if (studentNumberStr) studentMap[studentNumberStr] = student
-          if (studentIdUuid) studentMap[studentIdUuid] = student
-        })
+      try {
+        // Fetch all students and filter in memory to avoid UUID/TEXT comparison issues
+        const { data: allStudents, error: studentsError } = await supabaseClient
+          .from('students')
+          .select('*')
+          .limit(1000)
+        
+        if (studentsError) {
+          console.error('Error fetching students:', studentsError)
+          // Continue without student info rather than failing completely
+        } else if (allStudents) {
+          // Create a map for quick lookup - check all possible ID fields
+          allStudents.forEach((student: any) => {
+            const studentIdStr = (student.student_id || '').toString().trim()
+            const studentNumberStr = (student.student_number || '').toString().trim()
+            const studentIdUuid = (student.id || '').toString().trim()
+            
+            // Map by all possible identifiers
+            if (studentIdStr) studentMap[studentIdStr] = student
+            if (studentNumberStr) studentMap[studentNumberStr] = student
+            if (studentIdUuid) studentMap[studentIdUuid] = student
+          })
+        }
+      } catch (studentsFetchError: any) {
+        console.error('Error in student fetch:', studentsFetchError)
+        // Continue without student info
       }
     }
 
