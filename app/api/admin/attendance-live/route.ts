@@ -92,9 +92,11 @@ export async function GET(request: Request) {
         console.log('Count query successful, count:', count)
         
         // Now try the actual query
+        // Use RPC or raw query to avoid PostgREST relationship validation
+        // Select specific columns to avoid triggering foreign key lookups
         let query = supabaseClient
           .from('attendance_records')
-          .select('id, scan_time, scan_type, student_id, rfid_card, status') // Select only needed columns
+          .select('id, scan_time, scan_type, student_id, rfid_card, rfid_tag, status, time_in, time_out, created_at') // Select only needed columns, no joins
           .order('scan_time', { ascending: false })
           .limit(limit)
 
