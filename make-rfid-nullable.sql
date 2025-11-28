@@ -9,11 +9,18 @@ ALTER COLUMN rfid_tag DROP NOT NULL;
 ALTER TABLE attendance_records 
 ALTER COLUMN rfid_card DROP NOT NULL;
 
--- Make device_id nullable (remove NOT NULL constraint if it exists)
+-- Step 1: Drop foreign key constraint on device_id (if it exists)
+ALTER TABLE attendance_records 
+DROP CONSTRAINT IF EXISTS attendance_records_device_id_fkey;
+
+ALTER TABLE attendance_records 
+DROP CONSTRAINT IF EXISTS attendance_records_device_id_devices_id_fkey;
+
+-- Step 2: Make device_id nullable (remove NOT NULL constraint if it exists)
 ALTER TABLE attendance_records 
 ALTER COLUMN device_id DROP NOT NULL;
 
--- Change device_id from UUID to TEXT (if it's currently UUID type)
+-- Step 3: Change device_id from UUID to TEXT (if it's currently UUID type)
 -- This allows storing device identifiers like "ESP32"
 ALTER TABLE attendance_records 
 ALTER COLUMN device_id TYPE TEXT USING device_id::TEXT;
