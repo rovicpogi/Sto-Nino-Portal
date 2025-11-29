@@ -260,6 +260,13 @@ export async function GET(request: Request) {
     }
     
     console.log(`✅ Found ${data.length} attendance records`)
+    if (data.length > 0) {
+      console.log('📅 Sample record times:', data.slice(0, 3).map((r: any) => ({
+        scan_time: r.scan_time,
+        created_at: r.created_at,
+        id: r.id
+      })))
+    }
     
     // Format the response
     const formattedRecords = (data || []).map((record: any) => {
@@ -313,6 +320,12 @@ export async function GET(request: Request) {
       }
     })
 
+    console.log(`📤 Returning ${formattedRecords.length} formatted records to frontend`)
+    if (formattedRecords.length > 0) {
+      console.log('📅 First record scan time:', formattedRecords[0].scanTime)
+      console.log('📅 Last record scan time:', formattedRecords[formattedRecords.length - 1].scanTime)
+    }
+    
     return NextResponse.json({
       success: true,
       records: formattedRecords,
