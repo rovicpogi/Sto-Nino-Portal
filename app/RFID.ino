@@ -36,8 +36,15 @@
 const char* ssid = "PLDTHOMEFIBRcb1f0";
 const char* password = "PLDTWIFIf3p4u";
 
-// Server URL (Vercel deployment)
-const char* serverURL = "https://migrate-eight.vercel.app/api/admin/attendance-live";
+// Server URL Configuration
+// Switch between LOCAL (faster) and VERCEL (production) by uncommenting the one you want
+
+// LOCAL SERVER (FASTER - for testing/development)
+// Make sure your Next.js dev server is running on port 3000
+const char* serverURL = "http://192.168.1.9:3000/api/admin/attendance-live";
+
+// VERCEL DEPLOYMENT (for production/remote access)
+// const char* serverURL = "https://migrate-eight.vercel.app/api/admin/attendance-live";
 
 // RC522 Pins
 #define SS_PIN 5
@@ -62,9 +69,11 @@ bool isConnected = false;
 bool rc522Working = false;
 
 // HTTP Client reuse for faster connections
-WiFiClientSecure client;
+WiFiClientSecure secureClient;  // For HTTPS (Vercel)
+WiFiClient regularClient;       // For HTTP (local)
 HTTPClient http;
 bool httpInitialized = false;
+bool useLocalServer = true;  // Set to true for local, false for Vercel
 
 void setup() {
   // Initialize Serial
@@ -299,14 +308,26 @@ void sendScanToServer(String rfidCard) {
     }
   }
   
-  Serial.println("Preparing HTTPS connection...");
+  // Determine if using local (HTTP) or Vercel (HTTPS)
+  bool isLocal = String(serverURL).startsWith("http://");
+  
+  Serial.print("Preparing ");
+  Serial.print(isLocal ? "HTTP" : "HTTPS");
+  Serial.println(" connection...");
   Serial.println("Server URL: " + String(serverURL));
   
   // Reuse client connection for faster requests
   if (!httpInitialized) {
-    client.setInsecure(); // Skip certificate validation
-    client.setTimeout(10000); // Reduced from 15s to 10s for faster timeout
-    http.setTimeout(10000); // Reduced from 15s to 10s
+    if (isLocal) {
+      // HTTP for local server (faster, no SSL overhead)
+      regularClient.setTimeout(5000); // 5 seconds for local (very fast)
+      http.setTimeout(5000);
+    } else {
+      // HTTPS for Vercel
+      secureClient.setInsecure(); // Skip certificate validation
+      secureClient.setTimeout(10000); // 10 seconds for remote
+      http.setTimeout(10000);
+    }
     http.setReuse(true); // Enable connection reuse for faster requests
     httpInitialized = true;
   }
@@ -320,16 +341,24 @@ void sendScanToServer(String rfidCard) {
   
   // Begin connection with retry (faster retries)
   bool connected = false;
-  for (int attempt = 0; attempt < 2; attempt++) { // Reduced from 3 to 2 attempts
-    if (http.begin(client, url)) {
+  int maxAttempts = isLocal ? 1 : 2; // Local is so fast, only 1 attempt needed
+  for (int attempt = 0; attempt < maxAttempts; attempt++) {
+    // Use appropriate client based on URL
+    bool beginResult = isLocal 
+      ? http.begin(regularClient, url)
+      : http.begin(secureClient, url);
+      
+    if (beginResult) {
       connected = true;
       Serial.println("Connection established!");
       break;
     }
-    Serial.print("Connection attempt ");
-    Serial.print(attempt + 1);
-    Serial.println(" failed, retrying...");
-    delay(500); // Reduced from 1000ms to 500ms
+    if (attempt < maxAttempts - 1) {
+      Serial.print("Connection attempt ");
+      Serial.print(attempt + 1);
+      Serial.println(" failed, retrying...");
+      delay(isLocal ? 100 : 500); // Faster retry for local
+    }
   }
   
   if (!connected) {
