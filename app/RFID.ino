@@ -509,11 +509,9 @@ void sendScanToServer(String rfidCard) {
     delay(2000); // Reduced from 3000ms to 2000ms
   }
   
-  // Don't close connection if reusing (faster for next request)
-  if (!httpInitialized) {
-    http.end();
-    client.stop();
-  }
+  // End HTTP request but keep client connection for reuse
+  http.end();
+  // Note: We keep the client connection alive for faster next request
   
   // Minimal delay before next operation
   delay(50); // Reduced from 100ms to 50ms
