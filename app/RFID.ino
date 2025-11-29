@@ -244,49 +244,138 @@ void loop() {
 }
 
 void connectToWiFi() {
-  Serial.print("Connecting to WiFi: ");
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("WiFi Connection Debug");
+  Serial.println("========================================");
+  Serial.print("SSID: ");
   Serial.println(ssid);
+  Serial.print("Password: ");
+  Serial.println(password ? "***SET***" : "NOT SET");
   
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Connecting WiFi");
+  lcd.setCursor(0, 1);
+  lcd.print("Please wait...");
   
+  // Disconnect any existing connection
+  WiFi.disconnect(true);
+  delay(100);
+  
+  // Set WiFi mode to Station (client)
   WiFi.mode(WIFI_STA);
+  
+  // Set hostname for easier identification
+  WiFi.setHostname("ESP32-RFID-Scanner");
+  
+  // Begin connection
+  Serial.println("Starting WiFi connection...");
   WiFi.begin(ssid, password);
   
+  // Wait for connection with detailed status reporting
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+  int maxAttempts = 30; // 15 seconds total (30 * 500ms)
+  
+  Serial.println("Waiting for connection...");
+  while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
     delay(500);
     Serial.print(".");
     attempts++;
+    
+    // Print status every 5 attempts (2.5 seconds)
+    if (attempts % 5 == 0) {
+      Serial.println();
+      Serial.print("Attempt ");
+      Serial.print(attempts);
+      Serial.print("/");
+      Serial.print(maxAttempts);
+      Serial.print(" - Status: ");
+      printWiFiStatus();
+    }
   }
+  
+  Serial.println();
+  Serial.println("========================================");
   
   if (WiFi.status() == WL_CONNECTED) {
     isConnected = true;
-    Serial.println();
-    Serial.println("WiFi connected!");
-    Serial.print("IP: ");
+    Serial.println("✅ WiFi CONNECTED!");
+    Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("Subnet: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("RSSI (Signal): ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+    Serial.print("MAC Address: ");
+    Serial.println(WiFi.macAddress());
+    Serial.println("========================================");
     
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Connected");
     lcd.setCursor(0, 1);
-    String ip = WiFi.localIP().toString();
-    if (ip.length() > 16) {
-      ip = ip.substring(0, 13) + "...";
+    String ipStr = WiFi.localIP().toString();
+    if (ipStr.length() > 16) {
+      ipStr = ipStr.substring(0, 13) + "...";
     }
-    lcd.print(ip);
+    lcd.print(ipStr);
     delay(2000);
   } else {
-    Serial.println();
-    Serial.println("WiFi connection failed!");
     isConnected = false;
+    Serial.println("❌ WiFi CONNECTION FAILED!");
+    Serial.print("Final Status: ");
+    printWiFiStatus();
+    Serial.println("========================================");
+    Serial.println("Troubleshooting:");
+    Serial.println("1. Check SSID and password are correct");
+    Serial.println("2. Ensure WiFi router is powered on");
+    Serial.println("3. Check signal strength (move closer)");
+    Serial.println("4. Try disconnecting USB and using battery");
+    Serial.println("5. Check if router allows new devices");
+    Serial.println("6. USB power might be insufficient - try external power");
+    Serial.println("========================================");
     
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("WiFi Failed");
-    delay(2000);
+    lcd.print("WiFi Failed!");
+    lcd.setCursor(0, 1);
+    lcd.print("Check Serial");
+    delay(3000);
+  }
+}
+
+void printWiFiStatus() {
+  wl_status_t status = WiFi.status();
+  switch (status) {
+    case WL_IDLE_STATUS:
+      Serial.println("IDLE - WiFi is in process of changing between states");
+      break;
+    case WL_NO_SSID_AVAIL:
+      Serial.println("NO SSID AVAIL - Configured SSID cannot be reached");
+      break;
+    case WL_SCAN_COMPLETED:
+      Serial.println("SCAN COMPLETED - Networks scan completed");
+      break;
+    case WL_CONNECTED:
+      Serial.println("CONNECTED - Successfully connected to WiFi");
+      break;
+    case WL_CONNECT_FAILED:
+      Serial.println("CONNECT FAILED - Password is incorrect");
+      break;
+    case WL_CONNECTION_LOST:
+      Serial.println("CONNECTION LOST - Connection was lost");
+      break;
+    case WL_DISCONNECTED:
+      Serial.println("DISCONNECTED - WiFi is disconnected");
+      break;
+    default:
+      Serial.print("UNKNOWN STATUS: ");
+      Serial.println(status);
+      break;
   }
 }
 
@@ -338,30 +427,63 @@ void sendScanToServer(String rfidCard) {
   
   Serial.println("Connecting to: " + url);
   
-  // Begin connection with retry (faster retries)
+  // Begin connection with retry (increased attempts for reliability)
   bool connected = false;
-  int maxAttempts = isLocal ? 1 : 2; // Local is so fast, only 1 attempt needed
+  int maxAttempts = isLocal ? 3 : 2; // Increased to 3 attempts for local
+  Serial.println("Attempting to connect to server...");
+  
   for (int attempt = 0; attempt < maxAttempts; attempt++) {
+    Serial.print("Connection attempt ");
+    Serial.print(attempt + 1);
+    Serial.print("/");
+    Serial.print(maxAttempts);
+    Serial.println("...");
+    
+    // Close any existing connection first
+    http.end();
+    delay(100);
+    
     // Use appropriate client based on URL
     bool beginResult = isLocal 
       ? http.begin(regularClient, url)
       : http.begin(secureClient, url);
       
     if (beginResult) {
+      Serial.println("✓ Connection established!");
       connected = true;
-      Serial.println("Connection established!");
       break;
-    }
-    if (attempt < maxAttempts - 1) {
-      Serial.print("Connection attempt ");
+    } else {
+      Serial.print("✗ Connection attempt ");
       Serial.print(attempt + 1);
-      Serial.println(" failed, retrying...");
-      delay(isLocal ? 100 : 500); // Faster retry for local
+      Serial.println(" failed");
+      if (attempt < maxAttempts - 1) {
+        Serial.println("Retrying in 500ms...");
+        delay(500);
+      }
     }
   }
   
   if (!connected) {
-    Serial.println("ERROR: Failed to establish connection after 3 attempts");
+    Serial.println("========================================");
+    Serial.println("❌ ERROR: Failed to establish connection");
+    Serial.println("========================================");
+    Serial.print("Server URL: ");
+    Serial.println(url);
+    Serial.print("WiFi Status: ");
+    printWiFiStatus();
+    Serial.print("WiFi IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.println("========================================");
+    Serial.println("Troubleshooting:");
+    Serial.println("1. Check if Next.js dev server is running");
+    Serial.println("2. Verify server URL is correct");
+    Serial.println("3. Check if PC firewall is blocking port 3000");
+    Serial.println("4. Try accessing URL in browser: " + url);
+    Serial.println("5. Verify ESP32 and PC are on same network");
+    Serial.println("========================================");
+    
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Connection");
@@ -385,11 +507,17 @@ void sendScanToServer(String rfidCard) {
   Serial.println("Sending: " + jsonPayload);
   Serial.println("Payload length: " + String(jsonPayload.length()));
   
-  // Send POST request
+  // Send POST request with timeout handling
+  Serial.println("Sending POST request...");
+  Serial.print("Payload: ");
+  Serial.println(jsonPayload);
+  
   int httpCode = http.POST(jsonPayload);
   
+  Serial.println("========================================");
   Serial.print("HTTP Response Code: ");
   Serial.println(httpCode);
+  Serial.println("========================================");
   
   if (httpCode > 0) {
     String response = http.getString();
@@ -492,17 +620,46 @@ void sendScanToServer(String rfidCard) {
     }
   } else {
     // HTTP Error Code -1 usually means connection failed
+    Serial.println("========================================");
+    Serial.println("❌ HTTP ERROR");
+    Serial.println("========================================");
     Serial.print("HTTP Error Code: ");
     Serial.println(httpCode);
     
     String errorMsg = "";
-    if (httpCode == -1) {
+    if (httpCode == -1 || httpCode == 0) {
       errorMsg = "Connection Failed";
-      Serial.println("ERROR: Connection failed. Possible causes:");
-      Serial.println("  - Server unreachable");
-      Serial.println("  - WiFi connection lost");
-      Serial.println("  - SSL/TLS handshake failed");
-      Serial.println("  - Timeout");
+      Serial.println("ERROR: Connection failed (Code -1)");
+      Serial.println("========================================");
+      Serial.println("Possible causes:");
+      Serial.println("1. Server unreachable (check if Next.js is running)");
+      Serial.println("2. WiFi connection lost");
+      Serial.println("3. Wrong IP address or port");
+      Serial.println("4. Firewall blocking connection");
+      Serial.println("5. Server not responding");
+      Serial.println("========================================");
+      Serial.print("Attempted URL: ");
+      Serial.println(url);
+      Serial.print("WiFi Status: ");
+      printWiFiStatus();
+      Serial.print("WiFi IP: ");
+      Serial.println(WiFi.localIP());
+      Serial.print("Target IP: ");
+      // Extract IP from URL
+      String targetIP = url;
+      targetIP = targetIP.substring(7); // Remove "http://"
+      int colonPos = targetIP.indexOf(':');
+      if (colonPos > 0) {
+        targetIP = targetIP.substring(0, colonPos);
+      }
+      Serial.println(targetIP);
+      Serial.println("========================================");
+      Serial.println("Quick Fix:");
+      Serial.println("1. Open browser and go to: " + url);
+      Serial.println("2. If browser shows error, server is not running");
+      Serial.println("3. Run: npm run dev (in project folder)");
+      Serial.println("4. Verify IP address matches your PC's IP");
+      Serial.println("========================================");
       
       // Try to reconnect WiFi
       if (WiFi.status() != WL_CONNECTED) {
