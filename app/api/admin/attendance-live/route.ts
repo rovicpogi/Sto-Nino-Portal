@@ -388,10 +388,15 @@ export async function POST(request: Request) {
     // Validate required fields
     if (!scanData.studentId && !scanData.rfidCard) {
       return NextResponse.json(
-        { success: false, error: 'Student ID or RFID Card is required' },
         { 
-          status: 400,
+          success: false, 
+          error: 'Student ID or RFID Card is required',
+          records: [],
+        },
+        { 
+          status: 200, // Return 200 to prevent frontend crash, but include error in response
           headers: {
+            'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
@@ -415,9 +420,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Database service not configured. Please check your environment variables.' 
+          error: 'Database service not configured. Please check your environment variables.',
+          records: [],
         },
-        { status: 500 }
+        { 
+          status: 200, // Return 200 with error message instead of 500
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        }
       )
     }
 
@@ -650,11 +664,13 @@ export async function POST(request: Request) {
         { 
           success: false, 
           error: insertError.message,
-          hint: 'Please check that all required columns exist in attendance_records table. Run create-attendance-table.sql in Supabase.'
+          hint: 'Please check that all required columns exist in attendance_records table. Run create-attendance-table.sql in Supabase.',
+          records: [],
         },
         { 
-          status: 500,
+          status: 200, // Return 200 with error message instead of 500
           headers: {
+            'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
