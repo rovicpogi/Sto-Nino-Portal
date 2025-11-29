@@ -35,6 +35,8 @@ export default function RfidDisplayPage() {
   const [lastScanTime, setLastScanTime] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<FilterType>("all")
   const [currentTime, setCurrentTime] = useState<string>("")
+  const [timeoutModeActive, setTimeoutModeActive] = useState(false)
+  const [timeoutCountdown, setTimeoutCountdown] = useState(0)
 
   const fetchLiveAttendance = useCallback(async (onlyNew = false) => {
     setLoadingAttendance(true)
@@ -70,38 +72,40 @@ export default function RfidDisplayPage() {
         console.log('✅ Latest scan:', latest)
         
         // Check if this is a NEW scan (different from current latest scan)
-        if (onlyNew && latestScan) {
-          // Compare by ID or scan time to detect new scans
-          const isNewScan = latest.id !== latestScan.id || 
-                           latest.scanTime !== latestScan.scanTime
+        const isNewScan = !latestScan || 
+                         latest.id !== latestScan.id || 
+                         latest.scanTime !== latestScan.scanTime
+        
+        if (isNewScan) {
+          console.log('🆕 NEW SCAN DETECTED!')
+          console.log('  Previous scan ID:', latestScan?.id || 'none')
+          console.log('  New scan ID:', latest.id)
+          console.log('  Previous scan time:', latestScan?.scanTime || 'none')
+          console.log('  New scan time:', latest.scanTime)
           
-          if (isNewScan) {
-            console.log('🆕 NEW SCAN DETECTED! Refreshing page...')
-            // Refresh the entire page/tab
-            window.location.reload()
-            return // Exit early since page is reloading
-          } else {
-            console.log('ℹ️ No new scan - same as current')
-          }
-        }
-        
-        // Update latest scan display
-        setLatestScan(latest)
-        
-        // Update records list
-        if (onlyNew && result.records.length > 0) {
+          // Update latest scan display immediately (no page reload needed)
+          setLatestScan(latest)
+          
+          // Update records list - add new scan to the top
           setAttendanceRecords((prev) => {
-            const newRecords = result.records.filter(
-              (newRec: AttendanceRecord) => !prev.some((p) => p.id === newRec.id)
-            )
-            return [...newRecords, ...prev].slice(0, 50)
+            // Check if this record already exists
+            const exists = prev.some((p) => p.id === latest.id)
+            if (exists) {
+              // Update existing record
+              return prev.map((p) => p.id === latest.id ? latest : p)
+            } else {
+              // Add new record at the top
+              return [latest, ...prev].slice(0, 50)
+            }
           })
+          
+          // Update last scan time for polling
+          setLastScanTime(latest.scanTime)
         } else {
-          setAttendanceRecords(result.records)
+          console.log('ℹ️ No new scan - same as current')
+          // Still update in case data changed
+          setLatestScan(latest)
         }
-        
-        // Update last scan time for polling
-        setLastScanTime(latest.scanTime)
       } else {
         console.log('❌ No records in response:', result)
         if (!result.success) {
@@ -183,6 +187,44 @@ export default function RfidDisplayPage() {
     })
   }
 
+  // Enable timeout mode for 5 seconds
+  const enableTimeoutMode = async () => {
+    try {
+      const response = await fetch('/api/admin/attendance-live', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'enable-timeout' }),
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setTimeoutModeActive(true)
+        setTimeoutCountdown(5)
+        
+        // Countdown timer
+        const countdownInterval = setInterval(() => {
+          setTimeoutCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdownInterval)
+              setTimeoutModeActive(false)
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else {
+        console.error('Failed to enable timeout mode:', result.error)
+        alert('Failed to enable timeout mode. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error enabling timeout mode:', error)
+      alert('Error enabling timeout mode. Please try again.')
+    }
+  }
+
   // Filter records based on selected filter type using database scanType field
   const filteredRecords = useMemo(() => {
     if (filterType === "all") {
@@ -254,6 +296,19 @@ export default function RfidDisplayPage() {
                 {currentTime || "--:--:--"}
               </div>
             </div>
+            {/* Time Out Button */}
+            <Button
+              onClick={enableTimeoutMode}
+              disabled={timeoutModeActive}
+              className={`${
+                timeoutModeActive
+                  ? "bg-orange-600 text-white hover:bg-orange-700"
+                  : "bg-orange-500 text-white hover:bg-orange-600"
+              } font-bold text-lg px-6 py-3 shadow-lg`}
+            >
+              <LogOut className="w-5 h-5 mr-2" />
+              {timeoutModeActive ? `Time Out Mode: ${timeoutCountdown}s` : "Record Time Out (5s)"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -361,97 +416,6 @@ export default function RfidDisplayPage() {
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* Recent Scans List - Show history if there are multiple scans */}
-        {attendanceRecords.length > 1 && (
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">
-                Recent Scans ({filteredRecords.length - 1}
-                {filterType !== "all" && ` of ${attendanceRecords.length - 1} total`})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredRecords.slice(1).length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <p>
-                    {`No ${filterType === "timein" ? "time in" : "time out"} scans found.`}
-                  </p>
-                </div>
-              ) : (
-              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-                {filteredRecords.slice(1).map((record, index) => {
-                  const recordDate = formatDate(record.scanTime)
-                  const prevDate = index > 0 ? formatDate(filteredRecords[index + 1].scanTime) : null
-                  const showDateSeparator = recordDate !== prevDate
-
-                  return (
-                    <div key={record.id}>
-                      {showDateSeparator && (
-                        <div className="text-center text-gray-500 text-sm font-semibold py-2 border-b border-gray-700 my-2">
-                          {recordDate}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between p-4 rounded-lg border bg-gray-700/50 border-gray-600 hover:bg-gray-700 transition-colors">
-                        <div className="flex items-center gap-4 flex-1">
-                          {/* Photo */}
-                          <div className="flex-shrink-0">
-                            {record.studentPhoto ? (
-                              <Image
-                                src={record.studentPhoto}
-                                alt={record.studentName}
-                                width={60}
-                                height={60}
-                                className="rounded-full border-2 border-gray-600 object-cover"
-                              />
-                            ) : (
-                              <div className="w-15 h-15 rounded-full border-2 border-gray-600 bg-gray-700 flex items-center justify-center">
-                                <User className="w-8 h-8 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          {/* Date and Time */}
-                          <div className="text-left w-32">
-                            <div className="text-sm text-gray-400 mb-1">Date</div>
-                            <div className="text-sm font-semibold text-white">{formatDate(record.scanTime)}</div>
-                            <div className="text-lg font-mono text-gray-300 mt-1">{formatTime(record.scanTime)}</div>
-                          </div>
-                          {/* Name and Info */}
-                          <div className="flex-1">
-                            <div className="text-xl font-bold text-white mb-1">{record.studentName}</div>
-                            <div className="text-sm text-gray-400">
-                              {record.isTeacher 
-                                ? `Subject: ${record.subject || "N/A"}`
-                                : `${record.gradeLevel || "N/A"} - ${record.section || "N/A"} | ID: ${record.studentId || "N/A"}`
-                              }
-                            </div>
-                          </div>
-                          {/* Scan Type */}
-                          <div>
-                            <Badge
-                              className={
-                                record.scanType === "timein"
-                                  ? "bg-green-600 text-white"
-                                  : record.scanType === "timeout"
-                                  ? "bg-orange-600 text-white"
-                                  : "bg-gray-600 text-white"
-                              }
-                            >
-                              {record.scanType === "timein" ? "TIME IN" : 
-                               record.scanType === "timeout" ? "TIME OUT" : 
-                               "SCAN"}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
         )}
       </div>
     </div>

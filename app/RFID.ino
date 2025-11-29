@@ -612,11 +612,27 @@ void sendScanToServer(String rfidCard) {
         delay(3000); // Reduced from 5000ms to 3000ms
       }
     } else {
-      Serial.println("Invalid response format");
+      Serial.println("========================================");
+      Serial.println("❌ INVALID RESPONSE FORMAT");
+      Serial.println("========================================");
+      Serial.print("Response length: ");
+      Serial.println(response.length());
+      Serial.print("Response (first 200 chars): ");
+      Serial.println(response.substring(0, 200));
+      Serial.println("========================================");
+      Serial.println("Possible causes:");
+      Serial.println("  1. Server returned HTML instead of JSON");
+      Serial.println("  2. Server returned empty response");
+      Serial.println("  3. Response is not valid JSON");
+      Serial.println("  4. Network issue causing truncated response");
+      Serial.println("========================================");
+      
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Invalid Response");
-      delay(2000); // Reduced from 3000ms to 2000ms
+      lcd.setCursor(0, 1);
+      lcd.print("Check Serial");
+      delay(3000);
     }
   } else {
     // HTTP Error Code -1 usually means connection failed
@@ -627,16 +643,63 @@ void sendScanToServer(String rfidCard) {
     Serial.println(httpCode);
     
     String errorMsg = "";
-    if (httpCode == -1 || httpCode == 0) {
-      errorMsg = "Connection Failed";
-      Serial.println("ERROR: Connection failed (Code -1)");
-      Serial.println("========================================");
-      Serial.println("Possible causes:");
-      Serial.println("1. Server unreachable (check if Next.js is running)");
-      Serial.println("2. WiFi connection lost");
-      Serial.println("3. Wrong IP address or port");
-      Serial.println("4. Firewall blocking connection");
-      Serial.println("5. Server not responding");
+    if (httpCode == -1 || httpCode == 0 || httpCode == -11) {
+      if (httpCode == -11) {
+        errorMsg = "Connection Refused";
+        Serial.println("========================================");
+        Serial.println("❌ ERROR -11: Connection Refused");
+        Serial.println("========================================");
+        Serial.println("This means the server rejected the connection.");
+        Serial.println("Possible causes:");
+        Serial.println("1. Next.js server is NOT running");
+        Serial.println("2. Wrong IP address in serverURL");
+        Serial.println("3. Firewall blocking port 3000");
+        Serial.println("4. ESP32 and PC on different networks");
+        Serial.println("========================================");
+        Serial.print("Target Server: ");
+        Serial.println(serverURL);
+        Serial.print("ESP32 IP: ");
+        Serial.println(WiFi.localIP());
+        Serial.print("Gateway: ");
+        Serial.println(WiFi.gatewayIP());
+        Serial.print("Server IP (extracted): ");
+        // Extract IP from URL
+        String urlStr = String(serverURL);
+        if (urlStr.startsWith("http://")) {
+          int start = urlStr.indexOf("//") + 2;
+          int end = urlStr.indexOf(":", start);
+          if (end == -1) end = urlStr.indexOf("/", start);
+          if (end != -1) {
+            Serial.println(urlStr.substring(start, end));
+          }
+        }
+        Serial.println("========================================");
+        Serial.println("Troubleshooting Steps:");
+        Serial.println("1. Open browser on PC and go to: " + String(serverURL));
+        Serial.println("2. If browser shows error, server is not running");
+        Serial.println("3. Run 'npm run dev' in your project folder");
+        Serial.println("4. Check Windows Firewall allows port 3000");
+        Serial.println("5. Verify ESP32 IP and PC IP are on same subnet");
+        Serial.println("========================================");
+        Serial.println("========================================");
+        Serial.println("This means the server rejected the connection.");
+        Serial.println("Possible causes:");
+        Serial.println("1. Server is NOT running (most common)");
+        Serial.println("2. Wrong IP address (192.168.1.9 might be wrong)");
+        Serial.println("3. Wrong port (should be 3000)");
+        Serial.println("4. Firewall blocking port 3000 on your PC");
+        Serial.println("5. Server crashed or not accepting connections");
+      } else {
+        errorMsg = "Connection Failed";
+        Serial.println("ERROR: Connection failed (Code " + String(httpCode) + ")");
+        Serial.println("========================================");
+        Serial.println("Possible causes:");
+        Serial.println("1. Server unreachable (check if Next.js is running)");
+        Serial.println("2. WiFi connection lost");
+        Serial.println("3. Wrong IP address or port");
+        Serial.println("4. Firewall blocking connection");
+        Serial.println("5. Server not responding");
+      }
       Serial.println("========================================");
       Serial.print("Attempted URL: ");
       Serial.println(url);
@@ -647,18 +710,39 @@ void sendScanToServer(String rfidCard) {
       Serial.print("Target IP: ");
       // Extract IP from URL
       String targetIP = url;
-      targetIP = targetIP.substring(7); // Remove "http://"
+      if (targetIP.startsWith("http://")) {
+        targetIP = targetIP.substring(7); // Remove "http://"
+      } else if (targetIP.startsWith("https://")) {
+        targetIP = targetIP.substring(8); // Remove "https://"
+      }
       int colonPos = targetIP.indexOf(':');
       if (colonPos > 0) {
         targetIP = targetIP.substring(0, colonPos);
       }
+      int slashPos = targetIP.indexOf('/');
+      if (slashPos > 0) {
+        targetIP = targetIP.substring(0, slashPos);
+      }
       Serial.println(targetIP);
       Serial.println("========================================");
-      Serial.println("Quick Fix:");
-      Serial.println("1. Open browser and go to: " + url);
-      Serial.println("2. If browser shows error, server is not running");
-      Serial.println("3. Run: npm run dev (in project folder)");
-      Serial.println("4. Verify IP address matches your PC's IP");
+      Serial.println("TROUBLESHOOTING STEPS:");
+      Serial.println("1. Check if Next.js server is running:");
+      Serial.println("   - Open terminal in project folder");
+      Serial.println("   - Run: npm run dev");
+      Serial.println("   - Should see: 'Ready on http://localhost:3000'");
+      Serial.println("");
+      Serial.println("2. Verify IP address:");
+      Serial.println("   - On Windows: Run 'ipconfig' in CMD");
+      Serial.println("   - Look for 'IPv4 Address' (usually 192.168.x.x)");
+      Serial.println("   - Update serverURL in RFID.ino if different");
+      Serial.println("");
+      Serial.println("3. Test server in browser:");
+      Serial.println("   - Open: " + url);
+      Serial.println("   - Should see JSON response, not error page");
+      Serial.println("");
+      Serial.println("4. Check Windows Firewall:");
+      Serial.println("   - Allow port 3000 for Node.js");
+      Serial.println("   - Or temporarily disable firewall to test");
       Serial.println("========================================");
       
       // Try to reconnect WiFi
@@ -668,12 +752,15 @@ void sendScanToServer(String rfidCard) {
       }
     } else if (httpCode == -2) {
       errorMsg = "Timeout";
-      Serial.println("ERROR: Request timeout");
+      Serial.println("ERROR: Request timeout (Code -2)");
+      Serial.println("Server took too long to respond");
     } else if (httpCode == -3) {
       errorMsg = "Invalid Response";
-      Serial.println("ERROR: Invalid response from server");
+      Serial.println("ERROR: Invalid response from server (Code -3)");
     } else {
       errorMsg = "Error " + String(httpCode);
+      Serial.print("ERROR: Unknown HTTP error code: ");
+      Serial.println(httpCode);
     }
     
     // Try to get error response
@@ -684,14 +771,20 @@ void sendScanToServer(String rfidCard) {
     
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print(errorMsg);
+    if (errorMsg.length() <= 16) {
+      lcd.print(errorMsg);
+    } else {
+      lcd.print(errorMsg.substring(0, 16));
+    }
     lcd.setCursor(0, 1);
-    if (httpCode == -1) {
-      lcd.print("Check WiFi");
+    if (httpCode == -11) {
+      lcd.print("Server Not Running");
+    } else if (httpCode == -1 || httpCode == 0) {
+      lcd.print("Check WiFi/Server");
     } else {
       lcd.print("Code: " + String(httpCode));
     }
-    delay(2000); // Reduced from 3000ms to 2000ms
+    delay(3000); // Increased to 3 seconds for error messages
   }
   
   // End HTTP request but keep client connection for reuse

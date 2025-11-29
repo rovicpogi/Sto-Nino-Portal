@@ -1,5 +1,3 @@
 {
-  "/api/admin/attendance-live/route": "app/api/admin/attendance-live/route.js",
-  "/admin/rfid-display/page": "app/admin/rfid-display/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/api/admin/attendance-live/route": "app/api/admin/attendance-live/route.js"
 }

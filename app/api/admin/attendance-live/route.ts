@@ -2,13 +2,40 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabaseClient'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
+// Timeout mode tracker: stores expiration timestamp for timeout mode
+// Format: Map<timestamp, expirationTime>
+const timeoutModeExpiry = new Map<number, number>()
+
+// Clean up expired timeout modes (called on each request instead of setInterval)
+// This avoids issues with setInterval in Next.js serverless functions
+function cleanupExpiredTimeouts() {
+  const now = Date.now()
+  for (const [timestamp, expiry] of timeoutModeExpiry.entries()) {
+    if (now > expiry) {
+      timeoutModeExpiry.delete(timestamp)
+    }
+  }
+}
+
+// Check if timeout mode is currently active
+function isTimeoutModeActive(): boolean {
+  cleanupExpiredTimeouts() // Clean up before checking
+  const now = Date.now()
+  for (const expiry of timeoutModeExpiry.values()) {
+    if (now < expiry) {
+      return true
+    }
+  }
+  return false
+}
+
 // Enable CORS for ESP32 requests
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     },
   })
@@ -90,7 +117,7 @@ export async function GET(request: Request) {
           data = rpcData as any[]
           error = null
           querySuccess = true
-          console.log('✓ RPC query successful, records:', data.length)
+          console.log('✓ RPC query successful, records:', (data || []).length)
         } else {
           console.log('✗ RPC failed:', rpcError?.message || 'RPC function not found')
         }
@@ -103,12 +130,12 @@ export async function GET(request: Request) {
         try {
           console.log('Method 2: Trying direct query with explicit columns...')
           let directQuery = supabaseClient
-            .from('attendance_records')
+      .from('attendance_records')
             .select('id, scan_time, scan_type, student_id, rfid_card, rfid_tag, status, time_in, time_out, created_at, device_id')
-            .order('scan_time', { ascending: false })
-            .limit(limit)
-          
-          if (since) {
+      .order('scan_time', { ascending: false })
+      .limit(limit)
+
+    if (since) {
             directQuery = directQuery.gt('scan_time', since)
           }
           
@@ -118,7 +145,7 @@ export async function GET(request: Request) {
             data = directResult.data || []
             error = null
             querySuccess = true
-            console.log('✓ Direct query (minimal) successful, records:', data.length)
+            console.log('✓ Direct query (minimal) successful, records:', (data || []).length)
           } else {
             // Check if it's a PGRST200 error - if so, just return empty
             if (directResult.error?.code === 'PGRST200' || 
@@ -243,7 +270,7 @@ export async function GET(request: Request) {
     }
 
     // If we have no data, return empty array
-    if (!data || data.length === 0) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
       console.log('📭 No attendance records found in database')
       console.log('💡 This could mean:')
       console.log('   1. No scans have been recorded yet')
@@ -259,15 +286,15 @@ export async function GET(request: Request) {
       })
     }
     
-    console.log(`✅ Found ${data.length} attendance records`)
-    if (data.length > 0) {
+    console.log(`✅ Found ${(data || []).length} attendance records`)
+    if ((data || []).length > 0) {
       console.log('📅 Sample record times:', data.slice(0, 3).map((r: any) => ({
         scan_time: r.scan_time,
         created_at: r.created_at,
         id: r.id
       })))
     }
-    
+
     // Format the response
     const formattedRecords = (data || []).map((record: any) => {
       // Determine scan type from database fields
@@ -300,16 +327,16 @@ export async function GET(request: Request) {
       const person = teacher || student
       
       return {
-        id: record.id,
+      id: record.id,
         studentId: record.student_id,
         studentName: person
           ? `${person.first_name || person.firstName || ''} ${person.last_name || person.lastName || ''}`.trim() || person.name || 'Unknown'
           : 'Unknown',
         gradeLevel: isTeacher ? null : (person?.grade_level || person?.gradeLevel || 'N/A'),
         section: isTeacher ? null : (person?.section || 'N/A'),
-        scanTime: record.scan_time || record.created_at,
-        status: record.status || 'Present',
-        rfidCard: record.rfid_card || 'N/A',
+      scanTime: record.scan_time || record.created_at,
+      status: record.status || 'Present',
+      rfidCard: record.rfid_card || 'N/A',
         studentPhoto: person?.photo_url || person?.profile_picture || person?.picture || null,
         scanType: scanType,
         timeIn: record.time_in || null,
@@ -320,12 +347,12 @@ export async function GET(request: Request) {
       }
     })
 
-    console.log(`📤 Returning ${formattedRecords.length} formatted records to frontend`)
-    if (formattedRecords.length > 0) {
-      console.log('📅 First record scan time:', formattedRecords[0].scanTime)
-      console.log('📅 Last record scan time:', formattedRecords[formattedRecords.length - 1].scanTime)
+    console.log(`📤 Returning ${(formattedRecords || []).length} formatted records to frontend`)
+    if ((formattedRecords || []).length > 0) {
+      console.log('📅 First record scan time:', formattedRecords[0]?.scanTime)
+      console.log('📅 Last record scan time:', formattedRecords[formattedRecords.length - 1]?.scanTime)
     }
-    
+
     return NextResponse.json({
       success: true,
       records: formattedRecords,
@@ -398,90 +425,74 @@ export async function POST(request: Request) {
     console.log("SERVICE Key (first 20 chars):", process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) || "MISSING")
     console.log("==========================================")
 
+    let scanData: any = null
     try {
-      const scanData = await request.json()
+      scanData = await request.json()
+    } catch (jsonError: any) {
+      console.error('Error parsing request JSON:', jsonError)
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Invalid JSON in request body',
+          message: 'Please ensure the request contains valid JSON',
+        },
+        { 
+          status: 200,
+          headers: postHeaders,
+        }
+      )
+    }
+    
+    if (!scanData) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Request body is required',
+          message: 'Please include RFID card data in the request',
+        },
+        { 
+          status: 200,
+          headers: postHeaders,
+        }
+      )
+    }
     
     // Validate required fields
     if (!scanData.studentId && !scanData.rfidCard) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Student ID or RFID Card is required',
-          records: [],
-        },
-        { 
-          status: 200, // Return 200 to prevent frontend crash, but include error in response
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+          { 
+            success: false, 
+            error: 'Student ID or RFID Card is required',
+            records: [],
           },
-        }
-      )
-    }
+          { 
+            status: 200, // Return 200 to prevent frontend crash, but include error in response
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          }
+        )
+      }
 
     // Use admin client for inserts to bypass RLS policies
     // This avoids UUID/TEXT comparison errors in RLS policies
     const supabaseClient = getSupabaseAdmin()
     
     if (!supabaseClient) {
-      console.error('Supabase client not initialized')
-      if (process.env.NODE_ENV === 'development') {
-        return NextResponse.json({
-          success: true,
-          message: 'Scan recorded (dev mode - not saved to database)',
-        })
-      }
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Database service not configured. Please check your environment variables.',
-          records: [],
-        },
-        { 
-          status: 200, // Return 200 with error message instead of 500
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-          },
+        console.error('Supabase client not initialized')
+        if (process.env.NODE_ENV === 'development') {
+          return NextResponse.json({
+            success: true,
+            message: 'Scan recorded (dev mode - not saved to database)',
+          })
         }
-      )
-    }
-
-    // Get current date (start of day) for checking existing records
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayStart = today.toISOString()
-    const todayEnd = new Date(today)
-    todayEnd.setHours(23, 59, 59, 999)
-    const todayEndISO = todayEnd.toISOString()
-
-    // Find student by RFID card or student ID
-    let studentId = scanData.studentId
-    if (!studentId && scanData.rfidCard) {
-      // Normalize RFID card - remove spaces, convert to uppercase, remove leading zeros
-      let rfidNormalized = scanData.rfidCard.toString().trim().toUpperCase().replace(/\s+/g, '')
-      // Also create version without leading zeros for matching
-      const rfidNoLeadingZeros = rfidNormalized.replace(/^0+/, '')
-      
-      console.log(`Searching for student with RFID: ${rfidNormalized} (also trying: ${rfidNoLeadingZeros})`)
-      
-      // Fetch all students and filter in memory to avoid column errors
-      const { data: allStudents, error: fetchError } = await supabaseClient
-        .from('students')
-        .select('*')
-        .limit(1000)
-
-      if (fetchError) {
-        console.error('Error fetching students:', fetchError)
         return NextResponse.json(
           { 
             success: false, 
-            error: `Database error: ${fetchError.message}`,
-            searchedRfid: rfidNormalized,
+            error: 'Database service not configured. Please check your environment variables.',
             records: [],
           },
           { 
@@ -496,36 +507,279 @@ export async function POST(request: Request) {
         )
       }
 
-      // Filter students in memory by RFID (check all possible column names)
-      // Priority: rfid_card (what ESP32 expects) > rfidCard > rfid_tag > rfidTag
-      const students = (allStudents || []).filter((student: any) => {
-        const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()  // Primary - ESP32 expects this
-        const rfid2 = (student.rfidCard || '').toString().trim().toUpperCase()
-        const rfid3 = (student.rfid_tag || '').toString().trim().toUpperCase()
-        const rfid4 = (student.rfidTag || '').toString().trim().toUpperCase()
-        
-        // Check exact matches first, then partial
-        return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
-               rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
-               rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
-               rfid4 === rfidNormalized || rfid4 === rfidNoLeadingZeros ||
-               rfid1.includes(rfidNormalized) || rfid2.includes(rfidNormalized) ||
-               rfid3.includes(rfidNormalized) || rfid4.includes(rfidNormalized)
-      })
+      // Get current date (start of day) for checking existing records
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStart = today.toISOString()
+      const todayEnd = new Date(today)
+      todayEnd.setHours(23, 59, 59, 999)
+      const todayEndISO = todayEnd.toISOString()
 
-      if (!students || students.length === 0) {
-        console.log(`No student found with RFID: ${rfidNormalized}`)
+      // Find student by RFID card or student ID
+      let studentId = scanData.studentId
+      if (!studentId && scanData.rfidCard) {
+        // Normalize RFID card - remove spaces, convert to uppercase, remove leading zeros
+        let rfidNormalized = scanData.rfidCard.toString().trim().toUpperCase().replace(/\s+/g, '')
+        // Also create version without leading zeros for matching
+        const rfidNoLeadingZeros = rfidNormalized.replace(/^0+/, '')
+        
+        console.log(`Searching for student with RFID: ${rfidNormalized} (also trying: ${rfidNoLeadingZeros})`)
+        
+        // Fetch all students and filter in memory to avoid column errors
+        const { data: allStudents, error: fetchError } = await supabaseClient
+          .from('students')
+          .select('*')
+          .limit(1000)
+
+        if (fetchError) {
+          console.error('Error fetching students:', fetchError)
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `Database error: ${fetchError.message}`,
+              searchedRfid: rfidNormalized,
+              records: [],
+            },
+            { 
+              status: 200, // Return 200 with error message instead of 500
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+              },
+            }
+          )
+        }
+
+        // FIRST check teachers table (prioritize teachers over students if same RFID)
+        // This ensures teacher scans are recorded as teachers, not students
+        console.log(`Checking teachers first for RFID: ${rfidNormalized}`)
+        const { data: allTeachers, error: teachersError } = await supabaseClient
+          .from('teachers')
+          .select('*')
+          .limit(1000)
+        
+        let matchedTeacher = null
+        if (!teachersError && allTeachers) {
+          // Filter teachers in memory by RFID (check all possible column names)
+          const teachers = (allTeachers || []).filter((teacher: any) => {
+            const rfid1 = (teacher.rfid_card || '').toString().trim().toUpperCase()
+            const rfid2 = (teacher.rfidCard || '').toString().trim().toUpperCase()
+            const rfid3 = (teacher.rfid_tag || '').toString().trim().toUpperCase()
+            const rfid4 = (teacher.rfidTag || '').toString().trim().toUpperCase()
+            
+            return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
+                   rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
+                   rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
+                   rfid4 === rfidNormalized || rfid4 === rfidNoLeadingZeros ||
+                   rfid1.includes(rfidNormalized) || rfid2.includes(rfidNormalized) ||
+                   rfid3.includes(rfidNormalized) || rfid4.includes(rfidNormalized)
+          })
+          
+          if (teachers && teachers.length > 0) {
+            matchedTeacher = teachers[0]
+            console.log(`✅ Found teacher FIRST: ${matchedTeacher.first_name || matchedTeacher.firstName || 'Unknown'} ${matchedTeacher.last_name || matchedTeacher.lastName || ''}`)
+            // Use teacher_id or id (TEXT) for attendance_records.student_id
+            studentId = matchedTeacher.teacher_id || matchedTeacher.id?.toString() || matchedTeacher.email
+          }
+        }
+        
+        // If no teacher found, check students table
+        if (!matchedTeacher) {
+          console.log(`No teacher found, checking students for RFID: ${rfidNormalized}`)
+          
+          // Filter students in memory by RFID (check all possible column names)
+          // Priority: rfid_card (what ESP32 expects) > rfidCard > rfid_tag > rfidTag
+          const students = (allStudents || []).filter((student: any) => {
+            const rfid1 = (student.rfid_card || '').toString().trim().toUpperCase()  // Primary - ESP32 expects this
+            const rfid2 = (student.rfidCard || '').toString().trim().toUpperCase()
+            const rfid3 = (student.rfid_tag || '').toString().trim().toUpperCase()
+            const rfid4 = (student.rfidTag || '').toString().trim().toUpperCase()
+            
+            // Check exact matches first, then partial
+            return rfid1 === rfidNormalized || rfid1 === rfidNoLeadingZeros ||
+                   rfid2 === rfidNormalized || rfid2 === rfidNoLeadingZeros ||
+                   rfid3 === rfidNormalized || rfid3 === rfidNoLeadingZeros ||
+                   rfid4 === rfidNormalized || rfid4 === rfidNoLeadingZeros ||
+                   rfid1.includes(rfidNormalized) || rfid2.includes(rfidNormalized) ||
+                   rfid3.includes(rfidNormalized) || rfid4.includes(rfidNormalized)
+          })
+
+          if (!students || students.length === 0) {
+            // Neither student nor teacher found
+            console.log(`❌ No student or teacher found with RFID: ${rfidNormalized}`)
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: `No student or teacher found for RFID: ${rfidNormalized}. Please assign this RFID card in the admin panel.`,
+                searchedRfid: rfidNormalized,
+                message: `RFID ${rfidNormalized} not assigned to any student or teacher`
+              },
+              { 
+                status: 404,
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type',
+                },
+              }
+            )
+          } else {
+            // Found a student
+            const matchedStudent = students[0]
+            console.log(`Found student: ${matchedStudent.first_name || matchedStudent.firstName || 'Unknown'} ${matchedStudent.last_name || matchedStudent.lastName || ''}`)
+            
+            // Use student_number or student_id (TEXT) - NOT the UUID id
+            // attendance_records.student_id is TEXT type, so we store TEXT values
+            studentId = matchedStudent.student_number || matchedStudent.student_id || matchedStudent.studentId || matchedStudent.id?.toString()
+          }
+        }
+      }
+
+      // Check if student has already scanned in today
+      // student_id is now TEXT type, so we can query directly
+      // But we need to cast to text to avoid UUID comparison errors
+      let todayRecords: any[] = []
+      let checkError: any = null
+      
+      // Fetch all records for today, then filter in memory to avoid type mismatch
+      const { data: allTodayRecords, error: fetchError } = await supabaseClient
+        .from('attendance_records')
+        .select('id, scan_type, scan_time, time_in, time_out, student_id')
+        .gte('scan_time', todayStart)
+        .lte('scan_time', todayEndISO)
+        .order('scan_time', { ascending: true })
+      
+      if (fetchError) {
+        checkError = fetchError
+        console.error('Error fetching today records:', fetchError)
+      } else if (allTodayRecords) {
+        // Filter in memory by student_id (text match) to avoid UUID/TEXT comparison issues
+        todayRecords = allTodayRecords.filter((r: any) => {
+          const rId = (r.student_id || '').toString().trim()
+          const sId = (studentId || '').toString().trim()
+          return rId === sId || rId === studentId || sId === r.student_id
+        })
+      }
+
+      if (checkError) {
+        console.error('Error checking existing records:', checkError)
+      }
+
+      // Determine scan type
+      // ALWAYS record as "timein" by default, unless timeout mode is active
+      const currentTime = new Date().toISOString()
+      let scanType: 'timein' | 'timeout' = 'timein'
+      let timeIn = null
+      let timeOut = null
+
+      // Check if timeout mode is active (button was clicked in display page)
+      const timeoutModeActive = isTimeoutModeActive()
+      
+      if (timeoutModeActive) {
+        // Timeout mode is active - record as timeout
+        scanType = 'timeout'
+        timeOut = currentTime
+        
+        // Find the most recent time in record for this student today
+        if (todayRecords && todayRecords.length > 0) {
+          const timeInRecord = todayRecords
+            .filter((r: any) => r.scan_type === 'timein' || r.scan_type === 'time_in')
+            .sort((a: any, b: any) => new Date(b.scan_time).getTime() - new Date(a.scan_time).getTime())[0]
+          
+          if (timeInRecord) {
+            timeIn = timeInRecord.time_in || timeInRecord.scan_time
+          }
+        }
+        
+        console.log('⏰ Timeout mode active - recording as timeout')
+      } else {
+        // Always record as time in (default behavior)
+        scanType = 'timein'
+        timeIn = currentTime
+        console.log('✅ Recording as time in (default)')
+      }
+
+      // Insert the attendance record
+      // Build insert object with all required fields
+      const attendanceRecord: any = {
+        student_id: studentId,
+      }
+      
+      // Add RFID fields - set both rfid_card and rfid_tag to avoid NOT NULL constraint errors
+      const rfidValue = scanData.rfidCard || ''
+      if (rfidValue) {
+        attendanceRecord.rfid_card = rfidValue
+        attendanceRecord.rfid_tag = rfidValue  // Some schemas use rfid_tag instead
+      } else {
+        // If no RFID provided, set empty string to avoid NOT NULL constraint
+        attendanceRecord.rfid_card = ''
+        attendanceRecord.rfid_tag = ''
+      }
+      
+      // Set device_id - if column is UUID type, we can't use text, so set to null
+      // If column is TEXT type, we can use a device identifier
+      // For now, don't set it to avoid UUID type errors
+      // attendanceRecord.device_id = scanData.deviceId || null
+      
+      attendanceRecord.scan_time = currentTime
+      attendanceRecord.scan_type = scanType
+      attendanceRecord.time_in = timeIn
+      attendanceRecord.time_out = timeOut
+      attendanceRecord.status = scanType === 'timein' ? 'Present' : 'Present'
+      attendanceRecord.created_at = currentTime
+      
+      // Optional type field for compatibility
+      attendanceRecord.type = scanType
+      
+      // Insert the attendance record (without join to avoid foreign key issues)
+      console.log('💾 Inserting attendance record:', {
+        student_id: attendanceRecord.student_id,
+        rfid_card: attendanceRecord.rfid_card,
+        scan_type: attendanceRecord.scan_type,
+        scan_time: attendanceRecord.scan_time
+      })
+      
+      const { data: newRecord, error: insertError } = await supabaseClient
+        .from('attendance_records')
+        .insert([attendanceRecord])
+        .select('*')
+        .single()
+
+      if (insertError) {
+        console.error('❌ Insert failed:', insertError)
+        console.error('Database error:', insertError)
+        
+        // In development, return success even if table doesn't exist
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Scan data (dev mode):', { studentId, scanType, timeIn, timeOut })
+          return NextResponse.json({
+            success: true,
+            message: 'Scan recorded (dev mode - not saved to database)',
+            scanType,
+            timeIn,
+            timeOut,
+          }, {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          })
+        }
         
         return NextResponse.json(
           { 
             success: false, 
-            error: `Student not found for RFID: ${rfidNormalized}. Please assign this RFID card to a student in the admin panel.`,
-            searchedRfid: rfidNormalized,
-            message: `RFID ${rfidNormalized} not assigned to any student`
+            error: insertError.message,
+            hint: 'Please check that all required columns exist in attendance_records table. Run create-attendance-table.sql in Supabase.',
+            records: [],
           },
           { 
-            status: 404,
+            status: 200, // Return 200 with error message instead of 500
             headers: {
+              'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
               'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
               'Access-Control-Allow-Headers': 'Content-Type',
@@ -533,229 +787,88 @@ export async function POST(request: Request) {
           }
         )
       }
-      
-      // Use first match
-      const matchedStudent = students[0]
-      
-      console.log(`Found student: ${matchedStudent.first_name || matchedStudent.firstName || 'Unknown'} ${matchedStudent.last_name || matchedStudent.lastName || ''}`)
-      
-      // Use student_number or student_id (TEXT) - NOT the UUID id
-      // attendance_records.student_id is TEXT type, so we store TEXT values
-      studentId = matchedStudent.student_number || matchedStudent.student_id || matchedStudent.studentId || matchedStudent.id?.toString()
-    }
 
-    // Check if student has already scanned in today
-    // student_id is now TEXT type, so we can query directly
-    // But we need to cast to text to avoid UUID comparison errors
-    let todayRecords: any[] = []
-    let checkError: any = null
-    
-    // Fetch all records for today, then filter in memory to avoid type mismatch
-    const { data: allTodayRecords, error: fetchError } = await supabaseClient
-      .from('attendance_records')
-      .select('id, scan_type, scan_time, time_in, time_out, student_id')
-      .gte('scan_time', todayStart)
-      .lte('scan_time', todayEndISO)
-      .order('scan_time', { ascending: true })
-    
-    if (fetchError) {
-      checkError = fetchError
-      console.error('Error fetching today records:', fetchError)
-    } else if (allTodayRecords) {
-      // Filter in memory by student_id (text match) to avoid UUID/TEXT comparison issues
-      todayRecords = allTodayRecords.filter((r: any) => {
-        const rId = (r.student_id || '').toString().trim()
-        const sId = (studentId || '').toString().trim()
-        return rId === sId || rId === studentId || sId === r.student_id
+      // Fetch student or teacher information separately to avoid join issues
+      // Fetch all students and filter in memory to avoid UUID/TEXT comparison errors
+      let personInfo: any = null
+      let isTeacher = false
+      
+      if (studentId) {
+        // First, try to find in students table
+        const { data: allStudents } = await supabaseClient
+          .from('students')
+          .select('*')
+          .limit(1000)
+        
+        if (allStudents) {
+          // Find matching student by comparing as strings
+          const studentIdStr = (studentId || '').toString().trim()
+          personInfo = allStudents.find((student: any) => {
+            const sId = (student.student_id || '').toString().trim()
+            const sNum = (student.student_number || '').toString().trim()
+            const sUuid = (student.id || '').toString().trim()
+            return sId === studentIdStr || sNum === studentIdStr || sUuid === studentIdStr
+          }) || null
+        }
+        
+        // If not found in students, try teachers table
+        if (!personInfo) {
+          const { data: allTeachers } = await supabaseClient
+            .from('teachers')
+            .select('*')
+            .limit(1000)
+          
+          if (allTeachers) {
+            const personIdStr = (studentId || '').toString().trim()
+            personInfo = allTeachers.find((teacher: any) => {
+              const tId = (teacher.teacher_id || '').toString().trim()
+              const tUuid = (teacher.id || '').toString().trim()
+              const tEmail = (teacher.email || '').toString().trim().toLowerCase()
+              return tId === personIdStr || tUuid === personIdStr || tEmail === personIdStr
+            }) || null
+            
+            if (personInfo) {
+              isTeacher = true
+            }
+          }
+        }
+      }
+
+      // Format the response
+      const formattedRecord = {
+        id: newRecord.id,
+        studentId: newRecord.student_id || studentId,
+        studentName: personInfo
+          ? `${personInfo.first_name || personInfo.firstName || ''} ${personInfo.last_name || personInfo.lastName || ''}`.trim() || personInfo.name || 'Unknown'
+          : 'Unknown',
+        gradeLevel: isTeacher ? null : (personInfo?.grade_level || personInfo?.gradeLevel || 'N/A'),
+        section: isTeacher ? null : (personInfo?.section || 'N/A'),
+        scanTime: newRecord.scan_time || newRecord.created_at,
+        status: newRecord.status || 'Present',
+        rfidCard: newRecord.rfid_card || scanData.rfidCard || 'N/A',
+        studentPhoto: personInfo?.photo_url || personInfo?.profile_picture || personInfo?.picture || null,
+        scanType: scanType,
+        timeIn: newRecord.time_in || null,
+        timeOut: newRecord.time_out || null,
+        isTeacher: isTeacher,
+        subject: isTeacher ? (personInfo?.subject || personInfo?.subjects || personInfo?.subject_taught || 'N/A') : null,
+      }
+
+      console.log('✅ Scan saved successfully!', {
+        id: newRecord.id,
+        student: formattedRecord.studentName,
+        scanType: scanType,
+        scanTime: formattedRecord.scanTime
       })
-    }
 
-    if (checkError) {
-      console.error('Error checking existing records:', checkError)
-    }
-
-    // Determine scan type
-    let scanType: 'timein' | 'timeout' = 'timein'
-    let timeIn = null
-    let timeOut = null
-    const currentTime = new Date().toISOString()
-
-    if (todayRecords && todayRecords.length > 0) {
-      // Check if there's already a time in for today
-      const hasTimeIn = todayRecords.some((r: any) => 
-        r.scan_type === 'timein' || r.scan_type === 'time_in' || 
-        (r.time_in && r.scan_time === r.time_in)
-      )
-      
-      if (hasTimeIn) {
-        // This is a time out
-        scanType = 'timeout'
-        timeOut = currentTime
-        // Find the time in record
-        const timeInRecord = todayRecords.find((r: any) => 
-          r.scan_type === 'timein' || r.scan_type === 'time_in' || 
-          (r.time_in && r.scan_time === r.time_in)
-        )
-        if (timeInRecord) {
-          timeIn = timeInRecord.time_in || timeInRecord.scan_time
-        }
-      } else {
-        // This is a time in
-        scanType = 'timein'
-        timeIn = currentTime
-      }
-    } else {
-      // No records today, this is a time in
-      scanType = 'timein'
-      timeIn = currentTime
-    }
-
-    // Insert the attendance record
-    // Build insert object with all required fields
-    const attendanceRecord: any = {
-      student_id: studentId,
-    }
-    
-    // Add RFID fields - set both rfid_card and rfid_tag to avoid NOT NULL constraint errors
-    const rfidValue = scanData.rfidCard || ''
-    if (rfidValue) {
-      attendanceRecord.rfid_card = rfidValue
-      attendanceRecord.rfid_tag = rfidValue  // Some schemas use rfid_tag instead
-    } else {
-      // If no RFID provided, set empty string to avoid NOT NULL constraint
-      attendanceRecord.rfid_card = ''
-      attendanceRecord.rfid_tag = ''
-    }
-    
-    // Set device_id - if column is UUID type, we can't use text, so set to null
-    // If column is TEXT type, we can use a device identifier
-    // For now, don't set it to avoid UUID type errors
-    // attendanceRecord.device_id = scanData.deviceId || null
-    
-    attendanceRecord.scan_time = currentTime
-    attendanceRecord.scan_type = scanType
-    attendanceRecord.time_in = timeIn
-    attendanceRecord.time_out = timeOut
-    attendanceRecord.status = scanType === 'timein' ? 'Present' : 'Present'
-    attendanceRecord.created_at = currentTime
-    
-    // Optional type field for compatibility
-    attendanceRecord.type = scanType
-    
-    // Insert the attendance record (without join to avoid foreign key issues)
-    console.log('💾 Inserting attendance record:', {
-      student_id: attendanceRecord.student_id,
-      rfid_card: attendanceRecord.rfid_card,
-      scan_type: attendanceRecord.scan_type,
-      scan_time: attendanceRecord.scan_time
-    })
-    
-    const { data: newRecord, error: insertError } = await supabaseClient
-      .from('attendance_records')
-      .insert([attendanceRecord])
-      .select('*')
-      .single()
-
-    if (insertError) {
-      console.error('❌ Insert failed:', insertError)
-      console.error('Database error:', insertError)
-      
-      // In development, return success even if table doesn't exist
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Scan data (dev mode):', { studentId, scanType, timeIn, timeOut })
-        return NextResponse.json({
-          success: true,
-          message: 'Scan recorded (dev mode - not saved to database)',
-          scanType,
-          timeIn,
-          timeOut,
-        }, {
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-          },
-        })
-      }
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: insertError.message,
-          hint: 'Please check that all required columns exist in attendance_records table. Run create-attendance-table.sql in Supabase.',
-          records: [],
-        },
-        { 
-          status: 200, // Return 200 with error message instead of 500
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-          },
-        }
-      )
-    }
-
-    // Fetch student information separately to avoid join issues
-    // Fetch all students and filter in memory to avoid UUID/TEXT comparison errors
-    let studentInfo: any = null
-    if (studentId) {
-      // Fetch all students and filter in memory
-      const { data: allStudents } = await supabaseClient
-        .from('students')
-        .select('*')
-        .limit(1000)
-      
-      if (allStudents) {
-        // Find matching student by comparing as strings
-        const studentIdStr = (studentId || '').toString().trim()
-        studentInfo = allStudents.find((student: any) => {
-          const sId = (student.student_id || '').toString().trim()
-          const sNum = (student.student_number || '').toString().trim()
-          const sUuid = (student.id || '').toString().trim()
-          return sId === studentIdStr || sNum === studentIdStr || sUuid === studentIdStr
-        }) || null
-      }
-    }
-
-    // Format the response
-    const formattedRecord = {
-      id: newRecord.id,
-      studentId: newRecord.student_id || studentId,
-      studentName: studentInfo
-        ? `${studentInfo.first_name || studentInfo.firstName || ''} ${studentInfo.last_name || studentInfo.lastName || ''}`.trim() || studentInfo.name || 'Unknown Student'
-        : 'Unknown Student',
-      gradeLevel: studentInfo?.grade_level || studentInfo?.gradeLevel || 'N/A',
-      section: studentInfo?.section || 'N/A',
-      scanTime: newRecord.scan_time || newRecord.created_at,
-      status: newRecord.status || 'Present',
-      rfidCard: newRecord.rfid_card || scanData.rfidCard || 'N/A',
-      studentPhoto: studentInfo?.photo_url || studentInfo?.profile_picture || studentInfo?.picture || null,
-      scanType: scanType,
-      timeIn: newRecord.time_in || null,
-      timeOut: newRecord.time_out || null,
-    }
-
-    console.log('✅ Scan saved successfully!', {
-      id: newRecord.id,
-      student: formattedRecord.studentName,
-      scanType: scanType,
-      scanTime: formattedRecord.scanTime
-    })
-
-    return NextResponse.json({
-      success: true,
-      record: formattedRecord,
-      message: `Time ${scanType === 'timein' ? 'In' : 'Out'} recorded successfully`,
-    }, {
-      status: 200,
-      headers: postHeaders,
-    })
-    } catch (innerError: any) {
-      // Re-throw to outer catch
-      throw innerError
-    }
+      return NextResponse.json({
+        success: true,
+        record: formattedRecord,
+        message: `Time ${scanType === 'timein' ? 'In' : 'Out'} recorded successfully`,
+      }, {
+        status: 200,
+        headers: postHeaders,
+      })
   } catch (error: any) {
     // Catch any unhandled errors that might cause 500 HTML response (for Vercel)
     console.error('CRITICAL: Unhandled error in POST handler:', error)
@@ -773,5 +886,66 @@ export async function POST(request: Request) {
       status: 200,
       headers: postHeaders,
     })
+  }
+}
+
+// PUT endpoint to enable timeout mode for 5 seconds
+export async function PUT(request: Request) {
+  const putHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
+
+  try {
+    const body = await request.json()
+    const { action } = body
+
+    if (action === 'enable-timeout') {
+      // Enable timeout mode for 5 seconds
+      const now = Date.now()
+      const expiry = now + 5000 // 5 seconds from now
+      const timestamp = now
+      
+      timeoutModeExpiry.set(timestamp, expiry)
+      
+      console.log('⏰ Timeout mode enabled for 5 seconds')
+      
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Timeout mode enabled for 5 seconds',
+          expiresAt: expiry,
+        },
+        {
+          status: 200,
+          headers: putHeaders,
+        }
+      )
+    } else {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid action',
+        },
+        {
+          status: 400,
+          headers: putHeaders,
+        }
+      )
+    }
+  } catch (error: any) {
+    console.error('Error in PUT handler:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.message || 'Internal server error',
+      },
+      {
+        status: 200,
+        headers: putHeaders,
+      }
+    )
   }
 }

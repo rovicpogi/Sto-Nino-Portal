@@ -1529,12 +1529,19 @@ export default function AdminPortal() {
                       <CardTitle className="text-sm">Academic Reports</CardTitle>
                     </CardHeader>
                     <CardContent>
+                      <Link href="/admin/teacher-attendance">
+                        <Button variant="outline" className="w-full mb-2 bg-transparent hover:bg-red-50">
+                          Teacher Attendance Analytics
+                        </Button>
+                      </Link>
                       <Button variant="outline" className="w-full mb-2 bg-transparent">
                         Grade Reports
                       </Button>
-                      <Button variant="outline" className="w-full mb-2 bg-transparent">
-                        Attendance Reports
-                      </Button>
+                      <Link href="/admin/attendance-reports">
+                        <Button variant="outline" className="w-full mb-2 bg-transparent hover:bg-red-50">
+                          Attendance Reports
+                        </Button>
+                      </Link>
                       <Button variant="outline" className="w-full mb-2 bg-transparent">
                         Performance Analytics
                       </Button>
