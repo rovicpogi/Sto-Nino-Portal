@@ -57,9 +57,14 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 // Variables
 String lastCardUID = "";
 unsigned long lastScanTime = 0;
-const unsigned long scanInterval = 2000; // 2 seconds between scans
+const unsigned long scanInterval = 1000; // 1 second between scans (reduced from 2s)
 bool isConnected = false;
 bool rc522Working = false;
+
+// HTTP Client reuse for faster connections
+WiFiClientSecure client;
+HTTPClient http;
+bool httpInitialized = false;
 
 void setup() {
   // Initialize Serial
@@ -154,18 +159,18 @@ void loop() {
     return;
   }
   
-  // CONTINUOUS CARD DETECTION - Most reliable method
-  // Reset the antenna and check for cards continuously
+  // CONTINUOUS CARD DETECTION - Optimized for speed
+  // Check for cards with minimal delay
   if (!mfrc522.PICC_IsNewCardPresent()) {
-    // No card detected, continue loop
-    delay(10);
+    // No card detected, continue loop (reduced delay for faster scanning)
+    delay(5); // Reduced from 10ms to 5ms
     return;
   }
   
   // Card detected! Now try to read it
   if (!mfrc522.PICC_ReadCardSerial()) {
-    // Failed to read, try again
-    delay(10);
+    // Failed to read, try again (reduced delay)
+    delay(5); // Reduced from 10ms to 5ms
     return;
   }
   
@@ -217,10 +222,10 @@ void loop() {
   // Send to server
   sendScanToServer(cardUID);
   
-  // Halt card and stop crypto
+  // Halt card and stop crypto (reduced delay for faster response)
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
-  delay(500);
+  delay(200); // Reduced from 500ms to 200ms
   
   // Reset display
   lcd.clear();
@@ -297,13 +302,14 @@ void sendScanToServer(String rfidCard) {
   Serial.println("Preparing HTTPS connection...");
   Serial.println("Server URL: " + String(serverURL));
   
-  WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation
-  client.setTimeout(15000); // 15 seconds timeout
-  
-  HTTPClient http;
-  http.setTimeout(15000); // 15 seconds timeout
-  http.setReuse(false); // Don't reuse connections
+  // Reuse client connection for faster requests
+  if (!httpInitialized) {
+    client.setInsecure(); // Skip certificate validation
+    client.setTimeout(10000); // Reduced from 15s to 10s for faster timeout
+    http.setTimeout(10000); // Reduced from 15s to 10s
+    http.setReuse(true); // Enable connection reuse for faster requests
+    httpInitialized = true;
+  }
   
   String url = String(serverURL);
   if (url.endsWith("/")) {
@@ -312,9 +318,9 @@ void sendScanToServer(String rfidCard) {
   
   Serial.println("Connecting to: " + url);
   
-  // Begin connection with retry
+  // Begin connection with retry (faster retries)
   bool connected = false;
-  for (int attempt = 0; attempt < 3; attempt++) {
+  for (int attempt = 0; attempt < 2; attempt++) { // Reduced from 3 to 2 attempts
     if (http.begin(client, url)) {
       connected = true;
       Serial.println("Connection established!");
@@ -323,7 +329,7 @@ void sendScanToServer(String rfidCard) {
     Serial.print("Connection attempt ");
     Serial.print(attempt + 1);
     Serial.println(" failed, retrying...");
-    delay(1000);
+    delay(500); // Reduced from 1000ms to 500ms
   }
   
   if (!connected) {
@@ -396,7 +402,7 @@ void sendScanToServer(String rfidCard) {
           lcd.print("Recorded");
         }
         
-        delay(3000);
+        delay(2000); // Reduced from 3000ms to 2000ms for faster next scan
       } else {
         // Error from server
         String errorMsg = "Error";
@@ -447,14 +453,14 @@ void sendScanToServer(String rfidCard) {
             lcd.print(line2);
           }
         }
-        delay(5000); // Show error longer
+        delay(3000); // Reduced from 5000ms to 3000ms
       }
     } else {
       Serial.println("Invalid response format");
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Invalid Response");
-      delay(3000);
+      delay(2000); // Reduced from 3000ms to 2000ms
     }
   } else {
     // HTTP Error Code -1 usually means connection failed
@@ -500,12 +506,15 @@ void sendScanToServer(String rfidCard) {
     } else {
       lcd.print("Code: " + String(httpCode));
     }
-    delay(3000);
+    delay(2000); // Reduced from 3000ms to 2000ms
   }
   
-  http.end();
-  client.stop();
+  // Don't close connection if reusing (faster for next request)
+  if (!httpInitialized) {
+    http.end();
+    client.stop();
+  }
   
-  // Small delay before next operation
-  delay(100);
+  // Minimal delay before next operation
+  delay(50); // Reduced from 100ms to 50ms
 }
