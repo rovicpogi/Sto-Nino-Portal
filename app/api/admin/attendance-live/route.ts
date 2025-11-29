@@ -244,15 +244,22 @@ export async function GET(request: Request) {
 
     // If we have no data, return empty array
     if (!data || data.length === 0) {
-      console.log('No attendance records found')
+      console.log('📭 No attendance records found in database')
+      console.log('💡 This could mean:')
+      console.log('   1. No scans have been recorded yet')
+      console.log('   2. Database table is empty')
+      console.log('   3. ESP32 scans are not being saved (check POST endpoint logs)')
       return NextResponse.json({
         success: true,
-        records: []
+        records: [],
+        message: 'No attendance records found. Scans will appear here once recorded.'
       }, {
         status: 200,
         headers: defaultHeaders,
       })
     }
+    
+    console.log(`✅ Found ${data.length} attendance records`)
     
     // Format the response
     const formattedRecords = (data || []).map((record: any) => {
@@ -601,6 +608,13 @@ export async function POST(request: Request) {
     attendanceRecord.type = scanType
     
     // Insert the attendance record (without join to avoid foreign key issues)
+    console.log('💾 Inserting attendance record:', {
+      student_id: attendanceRecord.student_id,
+      rfid_card: attendanceRecord.rfid_card,
+      scan_type: attendanceRecord.scan_type,
+      scan_time: attendanceRecord.scan_time
+    })
+    
     const { data: newRecord, error: insertError } = await supabaseClient
       .from('attendance_records')
       .insert([attendanceRecord])
@@ -608,6 +622,7 @@ export async function POST(request: Request) {
       .single()
 
     if (insertError) {
+      console.error('❌ Insert failed:', insertError)
       console.error('Database error:', insertError)
       
       // In development, return success even if table doesn't exist
@@ -684,6 +699,13 @@ export async function POST(request: Request) {
       timeIn: newRecord.time_in || null,
       timeOut: newRecord.time_out || null,
     }
+
+    console.log('✅ Scan saved successfully!', {
+      id: newRecord.id,
+      student: formattedRecord.studentName,
+      scanType: scanType,
+      scanTime: formattedRecord.scanTime
+    })
 
     return NextResponse.json({
       success: true,
