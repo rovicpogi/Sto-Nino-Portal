@@ -73,7 +73,6 @@ WiFiClientSecure secureClient;  // For HTTPS (Vercel)
 WiFiClient regularClient;       // For HTTP (local)
 HTTPClient http;
 bool httpInitialized = false;
-bool useLocalServer = true;  // Set to true for local, false for Vercel
 
 void setup() {
   // Initialize Serial
