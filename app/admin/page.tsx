@@ -358,22 +358,47 @@ export default function AdminPortal() {
     try {
       const response = await fetch("/api/admin/attendance-live?limit=100")
       
+      // Check if response is OK
+      if (!response.ok) {
+        // Try to get error message
+        let errorText = "Server error"
+        try {
+          const contentType = response.headers.get("content-type")
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json()
+            errorText = errorData.error || errorData.message || `HTTP ${response.status}`
+          } else {
+            errorText = `HTTP ${response.status}: ${response.statusText}`
+          }
+        } catch {
+          errorText = `HTTP ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorText)
+      }
+      
       // Check if response is JSON
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text()
+        console.error("Non-JSON response received:", text.substring(0, 200))
         throw new Error(`Invalid response format: ${text.substring(0, 100)}`)
       }
       
       const result = await response.json()
       if (result.success && result.records) {
         setRfidScans(result.records)
+        setRfidScansError(null) // Clear any previous errors
       } else {
-        setRfidScansError(result.error || "Failed to load RFID scans.")
+        setRfidScansError(result.error || result.warning || "Failed to load RFID scans.")
+        // Still set records if available (even if success is false)
+        if (result.records) {
+          setRfidScans(result.records)
+        }
       }
     } catch (error: any) {
       console.error("Error fetching RFID scans:", error)
       setRfidScansError(error?.message || "Unable to load RFID scans.")
+      // Don't clear existing scans on error - keep showing what we have
     } finally {
       setRfidScansLoading(false)
     }
