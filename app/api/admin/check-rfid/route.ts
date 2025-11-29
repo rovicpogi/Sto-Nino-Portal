@@ -60,8 +60,9 @@ export async function GET(request: Request) {
           searchedRfid: rfidNormalized
         },
         { 
-          status: 500,
+          status: 200, // Return 200 instead of 500 to prevent Internal Server Error
           headers: {
+            'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
@@ -134,7 +135,7 @@ export async function GET(request: Request) {
         assigned: false,
       },
       { 
-        status: 500,
+        status: 200, // Return 200 instead of 500 to prevent Internal Server Error
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',

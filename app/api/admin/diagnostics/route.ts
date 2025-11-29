@@ -25,7 +25,13 @@ export async function GET() {
 
     return NextResponse.json({ ok: true, ping, tables: tableStatus })
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'Unknown error' }, { status: 500 })
+    // Return 200 with error message instead of 500 to prevent Internal Server Error
+    return NextResponse.json({ 
+      ok: false, 
+      error: e?.message ?? 'Unknown error',
+      ping: null,
+      tables: {},
+    }, { status: 200 }) // Always return 200, never 500
   }
 }
 

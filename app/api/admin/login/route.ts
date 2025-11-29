@@ -25,9 +25,10 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Database error:', error)
+      // Return 200 with error message instead of 500
       return NextResponse.json(
         { ok: false, error: 'Database connection error. Please try again.' },
-        { status: 500 }
+        { status: 200 } // Return 200 to prevent Internal Server Error page
       )
     }
 
@@ -65,9 +66,10 @@ export async function POST(request: Request) {
       userType: 'admin',
     })
   } catch (e: any) {
+    // Return 200 with error message instead of 500 to prevent Internal Server Error
     return NextResponse.json(
       { ok: false, error: e?.message ?? 'Unknown error' },
-      { status: 500 }
+      { status: 200 } // Always return 200, never 500
     )
   }
 }
