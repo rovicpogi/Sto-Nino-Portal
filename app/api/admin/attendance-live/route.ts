@@ -317,6 +317,9 @@ export async function GET(request: Request) {
       success: true,
       records: formattedRecords,
       count: formattedRecords.length,
+    }, {
+      status: 200,
+      headers: defaultHeaders,
     })
   } catch (error: any) {
     console.error('Attendance records API error:', error)
