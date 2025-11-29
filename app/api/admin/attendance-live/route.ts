@@ -15,15 +15,6 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  // Debug: Log request info for localhost debugging
-  const url = new URL(request.url)
-  console.log("=== GET REQUEST DEBUG ===")
-  console.log("Request URL:", url.toString())
-  console.log("Origin:", request.headers.get('origin') || 'N/A')
-  console.log("Host:", request.headers.get('host') || 'N/A')
-  console.log("Environment:", process.env.NODE_ENV)
-  console.log("=========================")
-
   // Set default headers for all responses
   const defaultHeaders = {
     'Content-Type': 'application/json',
@@ -32,7 +23,16 @@ export async function GET(request: Request) {
     'Access-Control-Allow-Headers': 'Content-Type',
   }
 
+  // Wrap everything in try-catch to ensure we always return JSON
   try {
+    // Debug: Log request info for localhost debugging
+    const url = new URL(request.url)
+    console.log("=== GET REQUEST DEBUG ===")
+    console.log("Request URL:", url.toString())
+    console.log("Origin:", request.headers.get('origin') || 'N/A')
+    console.log("Host:", request.headers.get('host') || 'N/A')
+    console.log("Environment:", process.env.NODE_ENV)
+    console.log("=========================")
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
     const since = searchParams.get('since') // Optional: get records since this timestamp
