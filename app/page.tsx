@@ -59,8 +59,8 @@ export default function HomePage() {
         apiEndpoint = "/api/student/login"
       } else if (loginType === "admin") {
         apiEndpoint = "/api/admin/login"
-      } else if (loginType === "guardian") {
-        apiEndpoint = "/api/student/login"
+      } else if (loginType === "parent" || loginType === "guardian") {
+        apiEndpoint = "/api/parent/login"
       }
 
       const response = await fetch(apiEndpoint, {
@@ -83,6 +83,11 @@ export default function HomePage() {
           localStorage.setItem("teacher", JSON.stringify(data.teacher))
         } else if (data.student) {
           localStorage.setItem("student", JSON.stringify(data.student))
+        } else if (data.parent) {
+          localStorage.setItem("parent", JSON.stringify(data.parent))
+          if (data.children) {
+            localStorage.setItem("parentChildren", JSON.stringify(data.children))
+          }
         } else if (data.user) {
           // Handle new API format (data.user + data.userType)
           if (loginType === "teacher" || data.userType === "teacher") {
@@ -91,6 +96,11 @@ export default function HomePage() {
             localStorage.setItem("student", JSON.stringify(data.user))
           } else if (loginType === "admin" || data.userType === "admin") {
             localStorage.setItem("admin", JSON.stringify(data.user))
+          } else if (loginType === "parent" || loginType === "guardian" || data.userType === "parent") {
+            localStorage.setItem("parent", JSON.stringify(data.user))
+            if (data.children) {
+              localStorage.setItem("parentChildren", JSON.stringify(data.children))
+            }
           }
         }
         
@@ -104,8 +114,8 @@ export default function HomePage() {
           window.location.href = "/student"
         } else if (loginType === "admin") {
           window.location.href = "/admin"
-        } else if (loginType === "guardian") {
-          window.location.href = "/guardian"
+        } else if (loginType === "parent" || loginType === "guardian") {
+          window.location.href = "/parent"
         }
       } else {
         setLoginError(data.error || "Login failed")
