@@ -15,15 +15,14 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  // Debug: Log environment variables
-  console.log("=== ENVIRONMENT VARIABLES DEBUG ===")
-  console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING")
-  console.log("URL Value:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log("ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "MISSING")
-  console.log("ANON Key (first 20 chars):", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) || "MISSING")
-  console.log("SERVICE:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET" : "MISSING")
-  console.log("SERVICE Key (first 20 chars):", process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) || "MISSING")
-  console.log("===================================")
+  // Debug: Log request info for localhost debugging
+  const url = new URL(request.url)
+  console.log("=== GET REQUEST DEBUG ===")
+  console.log("Request URL:", url.toString())
+  console.log("Origin:", request.headers.get('origin') || 'N/A')
+  console.log("Host:", request.headers.get('host') || 'N/A')
+  console.log("Environment:", process.env.NODE_ENV)
+  console.log("=========================")
 
   // Set default headers for all responses
   const defaultHeaders = {
@@ -99,13 +98,13 @@ export async function GET(request: Request) {
         console.log('✗ RPC exception:', rpcException.message)
       }
       
-      // Method 2: If RPC failed, try direct query with minimal columns
+      // Method 2: If RPC failed, try direct query with explicit columns (no joins)
       if (!querySuccess) {
         try {
-          console.log('Method 2: Trying direct query with minimal columns...')
+          console.log('Method 2: Trying direct query with explicit columns...')
           let directQuery = supabaseClient
             .from('attendance_records')
-            .select('id, scan_time, student_id') // Minimal columns to avoid relationship checks
+            .select('id, scan_time, scan_type, student_id, rfid_card, rfid_tag, status, time_in, time_out, created_at, device_id')
             .order('scan_time', { ascending: false })
             .limit(limit)
           
