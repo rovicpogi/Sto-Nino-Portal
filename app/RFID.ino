@@ -33,8 +33,8 @@
 #include <ArduinoJson.h>
 
 // WiFi Credentials
-const char* ssid = "ZTE_2.4G_ammtqh";
-const char* password = "RHuafPuR";
+const char* ssid = "PLDTHOMEFIBRcb1f0";
+const char* password = "PLDTWIFIf3p4u";
 
 // Server URL (Vercel deployment)
 const char* serverURL = "https://migrate-eight.vercel.app/api/admin/attendance-live";
