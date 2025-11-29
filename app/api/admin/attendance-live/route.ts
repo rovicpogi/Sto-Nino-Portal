@@ -465,11 +465,13 @@ export async function POST(request: Request) {
           { 
             success: false, 
             error: `Database error: ${fetchError.message}`,
-            searchedRfid: rfidNormalized
+            searchedRfid: rfidNormalized,
+            records: [],
           },
           { 
-            status: 500,
+            status: 200, // Return 200 with error message instead of 500
             headers: {
+              'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
               'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
               'Access-Control-Allow-Headers': 'Content-Type',
@@ -746,10 +748,11 @@ export async function POST(request: Request) {
       {
         success: false,
         error: error?.message || 'Internal server error',
+        records: [],
         details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
       },
       { 
-        status: 500,
+        status: 200, // Return 200 with error message instead of 500
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
@@ -758,5 +761,27 @@ export async function POST(request: Request) {
         },
       }
     )
+  } catch (outerPostError: any) {
+    // Catch any unhandled errors that might cause 500 HTML response (for Vercel)
+    console.error('CRITICAL: Unhandled error in POST handler:', outerPostError)
+    console.error('Error stack:', outerPostError?.stack)
+    console.error('Error name:', outerPostError?.name)
+    console.error('Error message:', outerPostError?.message)
+    
+    // Always return JSON, never HTML (works for both localhost and Vercel)
+    return NextResponse.json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? outerPostError?.message : 'Internal server error',
+      records: [],
+      warning: 'Service error occurred',
+    }, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    })
   }
 }
