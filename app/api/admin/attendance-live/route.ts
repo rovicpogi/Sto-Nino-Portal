@@ -736,55 +736,29 @@ export async function POST(request: Request) {
       record: formattedRecord,
       message: `Time ${scanType === 'timein' ? 'In' : 'Out'} recorded successfully`,
     }, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
+      status: 200,
+      headers: postHeaders,
     })
+    } catch (innerError: any) {
+      // Re-throw to outer catch
+      throw innerError
+    }
   } catch (error: any) {
-    console.error('Record attendance API error:', error)
-    console.error('Error stack:', error?.stack)
-    console.error('Error details:', JSON.stringify(error, null, 2))
-    
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || 'Internal server error',
-        records: [],
-        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-      },
-      { 
-        status: 200, // Return 200 with error message instead of 500
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        },
-      }
-    )
-  } catch (outerPostError: any) {
     // Catch any unhandled errors that might cause 500 HTML response (for Vercel)
-    console.error('CRITICAL: Unhandled error in POST handler:', outerPostError)
-    console.error('Error stack:', outerPostError?.stack)
-    console.error('Error name:', outerPostError?.name)
-    console.error('Error message:', outerPostError?.message)
+    console.error('CRITICAL: Unhandled error in POST handler:', error)
+    console.error('Error stack:', error?.stack)
+    console.error('Error name:', error?.name)
+    console.error('Error message:', error?.message)
     
     // Always return JSON, never HTML (works for both localhost and Vercel)
     return NextResponse.json({
       success: false,
-      error: process.env.NODE_ENV === 'development' ? outerPostError?.message : 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error?.message : 'Internal server error',
       records: [],
       warning: 'Service error occurred',
     }, {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
+      headers: postHeaders,
     })
   }
 }
