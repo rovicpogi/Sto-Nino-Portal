@@ -365,25 +365,28 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  // Debug: Log environment variables
-  console.log("=== POST: ENVIRONMENT VARIABLES DEBUG ===")
-  console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING")
-  console.log("URL Value:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log("ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "MISSING")
-  console.log("ANON Key (first 20 chars):", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) || "MISSING")
-  console.log("SERVICE:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET" : "MISSING")
-  console.log("SERVICE Key (first 20 chars):", process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) || "MISSING")
-  console.log("==========================================")
+  // Set default headers for all responses
+  const postHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  }
 
+  // Wrap everything in try-catch to ensure we always return JSON (for Vercel)
   try {
-    // Handle CORS preflight
-    const headers = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    }
-    
-    const scanData = await request.json()
+    // Debug: Log environment variables
+    console.log("=== POST: ENVIRONMENT VARIABLES DEBUG ===")
+    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "MISSING")
+    console.log("URL Value:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log("ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "MISSING")
+    console.log("ANON Key (first 20 chars):", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 20) || "MISSING")
+    console.log("SERVICE:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "SET" : "MISSING")
+    console.log("SERVICE Key (first 20 chars):", process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20) || "MISSING")
+    console.log("==========================================")
+
+    try {
+      const scanData = await request.json()
     
     // Validate required fields
     if (!scanData.studentId && !scanData.rfidCard) {
